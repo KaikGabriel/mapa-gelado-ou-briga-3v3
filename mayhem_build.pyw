@@ -177,9 +177,10 @@ class DadosSite:
                 cartas.append({"nome": nome, "raridade": raridade, "tier": c["tier"]})
         if len(cartas) < 10:
             return False
+        build = self._limpar_build(bruto.get("build"))
         with self.trava:
             self.cartas[site][campeao] = {"patch": str(bruto.get("patch", ""))[:10],
-                                          "quando": time.time(), "cartas": cartas}
+                                          "quando": time.time(), "cartas": cartas, "build": build}
             self.versao += 1
             copia = json.dumps(self.cartas[site])
         try:
@@ -188,6 +189,28 @@ class DadosSite:
         except Exception:
             pass
         return True
+
+    @staticmethod
+    def _limpar_build(b) -> dict | None:
+        """So ids numericos e a ordem de habilidades no formato 'Q > E > W'."""
+        if not isinstance(b, dict):
+            return None
+        limpo = {}
+        for campo, maximo in (("feiticos", 2), ("inicio", 3), ("itens", 7), ("prismaticos", 4)):
+            ids = []
+            for x in b.get(campo) or []:
+                i = str(x.get("id", "") if isinstance(x, dict) else x)
+                if re.fullmatch(r"\d{1,7}", i) and i not in ids:
+                    ids.append(i)
+            limpo[campo] = ids[:maximo]
+        hab = str(b.get("habilidades", ""))
+        limpo["habilidades"] = hab if re.fullmatch(r"[QWE]( > [QWE]){0,2}", hab) else ""
+        return limpo if any(limpo.values()) else None
+
+    def build_de(self, nome: str, modo: str) -> dict | None:
+        with self.trava:
+            reg = self.cartas.get(site_de(modo), {}).get(slug(nome))
+        return (reg or {}).get("build")
 
     def cartas_de(self, nome: str, modo: str) -> list[tuple[str, str]]:
         """[(raridade, "Carta (S+) · Carta (S)")] com as melhores de cada raridade."""
@@ -481,7 +504,7 @@ def baixar(url: str, timeout=10) -> bytes:
 
 
 # ---------------------------------------------------------------- worker ---
-VAZIO = {"meu": None, "cartas": [], "banco": [], "aliados": [], "bans": [], "picks": [], "aviso": ""}
+VAZIO = {"meu": None, "build": None, "cartas": [], "banco": [], "aliados": [], "bans": [], "picks": [], "aviso": ""}
 
 
 class Observador(threading.Thread):
@@ -496,6 +519,9 @@ class Observador(threading.Thread):
         self.hist = Historico()
         self.modo = "KIWI"      # modo da selecao atual
         self.meus: set[int] = set()   # campeoes que voce pode jogar
+        self.itens: dict[str, str] = {}                  # id do item -> nome (pt_BR)
+        self.feiticos: dict[str, tuple[str, str]] = {}   # id do feitico -> (chave ddragon, nome)
+        self.imgs_build: dict[str, bytes | None] = {}
 
     # dados dos campeoes (nomes em ingles + icones)
     def carregar_campeoes(self, auth):
@@ -507,6 +533,13 @@ class Observador(threading.Thread):
                 f"https://ddragon.leagueoflegends.com/cdn/{self.versao}/data/en_US/champion.json"))
             for c in dados["data"].values():
                 self.campeoes[int(c["key"])] = (c["id"], c["name"])
+        except Exception:
+            pass
+        try:  # nomes dos itens e feiticos (para a build)
+            base = f"https://ddragon.leagueoflegends.com/cdn/{self.versao}/data/pt_BR"
+            self.itens = {k: v["name"] for k, v in json.loads(baixar(f"{base}/item.json"))["data"].items()}
+            self.feiticos = {v["key"]: (v["id"], v["name"])
+                             for v in json.loads(baixar(f"{base}/summoner.json"))["data"].values()}
         except Exception:
             pass
         try:  # completa com o cliente (campeoes novos)
@@ -536,6 +569,44 @@ class Observador(threading.Thread):
                 pass
         self.icones[cid] = dado
         return dado
+
+    def img_build(self, caminho: str) -> bytes | None:
+        """Icone de item/feitico do Data Dragon (com cache)."""
+        if caminho not in self.imgs_build:
+            dado = None
+            if self.versao:
+                try:
+                    dado = baixar(f"https://ddragon.leagueoflegends.com/cdn/{self.versao}/img/{caminho}")
+                except Exception:
+                    pass
+            self.imgs_build[caminho] = dado
+        return self.imgs_build[caminho]
+
+    def montar_build(self, cid: int) -> dict | None:
+        b = DADOS.build_de(self.nome(cid), self.modo)
+        if not b:
+            return None
+        url = url_build(self.nome(cid), self.modo)
+
+        def item(i):
+            return {"chave": f"item/{i}", "nome": self.itens.get(i, f"item {i}"),
+                    "icone": self.img_build(f"item/{i}.png"), "url": url}
+
+        def feitico(k):
+            chave, nome = self.feiticos.get(k, ("", f"feitico {k}"))
+            return {"chave": f"spell/{k}", "nome": nome, "url": url,
+                    "icone": self.img_build(f"spell/{chave}.png") if chave else None}
+
+        linhas = []
+        if b.get("feiticos"):
+            linhas.append(("Feiticos", [feitico(k) for k in b["feiticos"]]))
+        if b.get("inicio"):
+            linhas.append(("Inicio", [item(i) for i in b["inicio"]]))
+        if b.get("itens"):
+            linhas.append(("Itens", [item(i) for i in b["itens"]]))
+        if b.get("prismaticos"):
+            linhas.append(("Prismaticos", [item(i) for i in b["prismaticos"]]))
+        return {"linhas": linhas, "habilidades": b.get("habilidades", "")}
 
     def nome(self, cid: int) -> str:
         return self.campeoes.get(cid, ("", f"#{cid}"))[1]
@@ -586,6 +657,7 @@ class Observador(threading.Thread):
 
         estado = {"meu": self.info(cid) if cid else None,
                   "cartas": DADOS.cartas_de(self.nome(cid), self.modo) if cid else [],
+                  "build": self.montar_build(cid) if cid else None,
                   "banco": [self.info(b, b == melhor) for b in banco],
                   "aliados": [self.info(a) for a in aliados]}
 
@@ -737,6 +809,7 @@ class App:
         self.aviso.pack(fill="x", padx=12)
 
         self.meu = self._secao("SEU CAMPEAO")
+        self.build = self._secao("BUILD (METAsrc)")
         self.cartas = self._secao("CARTINHAS RECOMENDADAS (METAsrc, so na selecao)")
         self.banco = self._secao("BANCO (ordenado pelo tier, ★ = melhor que o seu)")
         self.aliados = self._secao("ALIADOS")
@@ -823,6 +896,45 @@ class App:
                 return None
         return self.imagens[chave]
 
+    def img_build(self, peca: dict) -> tk.PhotoImage | None:
+        """Icone de item/feitico (64px no Data Dragon) reduzido para 32px."""
+        if not peca.get("icone"):
+            return None
+        chave = ("build", peca["chave"])
+        if chave not in self.imagens:
+            try:
+                self.imagens[chave] = tk.PhotoImage(data=base64.b64encode(peca["icone"])).subsample(2)
+            except Exception:
+                return None
+        return self.imagens[chave]
+
+    def render_build(self, build: dict | None):
+        if not build:
+            tk.Label(self.build, text="ainda nao carregou: abra a build deste campeao (clique no icone acima)",
+                     bg=CARTAO, fg=APAGADO, font=("Segoe UI", 8)).pack(anchor="w", padx=8, pady=6)
+            return
+        linha = 0
+        for rotulo, pecas in build["linhas"]:
+            tk.Label(self.build, text=rotulo, bg=CARTAO, fg=DESTAQUE, font=("Segoe UI", 8, "bold"),
+                     anchor="nw").grid(row=linha, column=0, sticky="nw", padx=(8, 6), pady=(4, 0))
+            fila = tk.Frame(self.build, bg=CARTAO)
+            fila.grid(row=linha, column=1, sticky="w", pady=(2, 0))
+            for n, p in enumerate(pecas):
+                # numero na frente dos itens = ordem de compra
+                texto = f"{n + 1}. {p['nome']}" if rotulo == "Itens" else p["nome"]
+                tk.Button(fila, image=self.img_build(p), text=texto, compound="top",
+                          command=lambda u=p["url"]: webbrowser.open(u), bg=CARTAO, fg=TEXTO,
+                          activebackground=FUNDO, activeforeground=DESTAQUE, relief="flat", bd=0,
+                          cursor="hand2", font=("Segoe UI", 7), wraplength=66, width=66,
+                          padx=1, pady=1).pack(side="left", anchor="n", padx=1)
+            linha += 1
+        if build.get("habilidades"):
+            tk.Label(self.build, text="Habilidades", bg=CARTAO, fg=DESTAQUE, font=("Segoe UI", 8, "bold"),
+                     anchor="w").grid(row=linha, column=0, sticky="w", padx=(8, 6), pady=(4, 6))
+            tk.Label(self.build, text=f"maximizar {build['habilidades']}", bg=CARTAO, fg=TEXTO,
+                     font=("Segoe UI", 10, "bold"), anchor="w").grid(row=linha, column=1, sticky="w",
+                                                                     pady=(4, 6))
+
     def botao(self, pai, c: dict, tamanho, texto_lado=False):
         texto = c["texto"].replace("\n", "   ", 1) if texto_lado else c["texto"]
         return tk.Button(pai, image=self.img(c, tamanho), text=texto,
@@ -835,7 +947,7 @@ class App:
                          padx=6, pady=4)
 
     def render(self, e: dict):
-        for quadro in (self.meu, self.cartas, self.banco, self.aliados, self.bans, self.picks):
+        for quadro in (self.meu, self.build, self.cartas, self.banco, self.aliados, self.bans, self.picks):
             for w in quadro.winfo_children():
                 w.destroy()
         if e["meu"]:
@@ -843,7 +955,12 @@ class App:
         else:
             tk.Label(self.meu, text="-", bg=CARTAO, fg=APAGADO).pack(anchor="w", padx=8, pady=8)
         if e["meu"]:
-            self.cartas.master.pack(fill="x", after=self.meu.master)
+            self.build.master.pack(fill="x", after=self.meu.master)
+            self.render_build(e.get("build"))
+        else:
+            self.build.master.pack_forget()
+        if e["meu"]:
+            self.cartas.master.pack(fill="x", after=self.build.master)
             if e["cartas"]:
                 for i, (rotulo, texto) in enumerate(e["cartas"]):
                     tk.Label(self.cartas, text=rotulo, bg=CARTAO, fg=COR_RARIDADE.get(rotulo, TEXTO),

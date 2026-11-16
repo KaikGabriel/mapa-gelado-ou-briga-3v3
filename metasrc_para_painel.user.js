@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         METAsrc -> MayhemBuild
 // @namespace    mayhembuild
-// @version      1.1
-// @description  Quando voce abre uma pagina de Mayhem ou Arena no METAsrc, manda tiers/winrates e as cartinhas do campeao para o painel MayhemBuild no seu PC.
+// @version      1.2
+// @description  Quando voce abre uma pagina de Mayhem ou Arena no METAsrc, manda tiers/winrates, cartinhas e a build do campeao para o painel MayhemBuild no seu PC.
 // @match        https://www.metasrc.com/lol/mayhem*
 // @match        https://www.metasrc.com/lol/arena*
 // @grant        GM_xmlhttpRequest
@@ -72,7 +72,46 @@
     enviar('/dados', { modo, patch: patchDa(document), campeoes }, () => GM_setValue(chave, Date.now()));
   }
 
-  // ---------- cartinhas do campeao (pagina de build) ----------
+  // ---------- build do campeao (pagina de build) ----------
+  // Cada parte da build fica numa secao com titulo <h2>; dentro, os itens/feiticos
+  // tem data-tooltip-select="#item-3071" / "#spell-4".
+  function lerBuild() {
+    const nomes = {};
+    for (const el of document.querySelectorAll('[data-tooltip-select]')) {
+      const img = el.querySelector('img');
+      if (img && img.alt) nomes[el.dataset.tooltipSelect] = img.alt;
+    }
+    const secoes = [];
+    for (const h of document.querySelectorAll('h2')) {
+      let sec = h; // maior bloco que so tem este titulo
+      while (sec.parentElement && sec.parentElement.querySelectorAll('h2').length === 1) sec = sec.parentElement;
+      secoes.push({ titulo: h.textContent.trim(), sec });
+    }
+    const pegar = (regex, tipo, max) => {
+      const s = secoes.find(x => regex.test(x.titulo));
+      if (!s) return [];
+      const vistos = new Set(), lista = [];
+      for (const el of s.sec.querySelectorAll(`[data-tooltip-select^="#${tipo}-"]`)) {
+        const sel = el.dataset.tooltipSelect, id = sel.slice(tipo.length + 2);
+        if (!/^\d+$/.test(id) || vistos.has(id)) continue;
+        vistos.add(id);
+        lista.push({ id, nome: nomes[sel] || '' });
+        if (lista.length >= max) break;
+      }
+      return lista;
+    };
+    const prioridade = (document.body.textContent.match(/Priority\s*([QWE](?:\s*>\s*[QWE])+)/) || [])[1] || '';
+    return {
+      feiticos: pegar(/Summoner Spells/i, 'spell', 2),
+      inicio: pegar(/Starting Items/i, 'item', 2),
+      // build completa na ordem do site (ja inclui as botas e o elixir)
+      itens: pegar(/^(?!.*(Starting|Prismatic|Option|Order)).* Items$/i, 'item', 7),
+      prismaticos: pegar(/Best Prismatic Items/i, 'item', 4),
+      habilidades: prioridade.replace(/\s+/g, ' '),
+    };
+  }
+
+  // ---------- cartinhas + build do campeao (pagina de build) ----------
   function enviarCartas() {
     const m = location.pathname.match(/^\/lol\/(mayhem|arena)\/champions\/([a-z0-9-]+)\/build/);
     if (!m) return;
@@ -84,7 +123,9 @@
       .filter(a => a && a.displays && /^augment-/.test(a.key || ''))
       .map(a => ({ nome: a.displays.name, raridade: a.displays.rarity, tier: a.displays.tier }));
     if (cartas.length < 10) return;
-    enviar('/cartas', { modo: m[1], campeao: m[2], patch: patchDa(document), cartas });
+    let build = null;
+    try { build = lerBuild(); } catch (e) { /* sem build, manda so as cartinhas */ }
+    enviar('/cartas', { modo: m[1], campeao: m[2], patch: patchDa(document), cartas, build });
   }
 
   function rodar() {
