@@ -1,0 +1,9 @@
+# .exe gerado (vai na pagina de Releases, nao no repositorio)
+MayhemBuild.exe
+dist/
+build/
+*.spec
+
+# Python
+__pycache__/
+*.pyc
