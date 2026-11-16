@@ -46,6 +46,30 @@ CONGELADO = getattr(sys, "frozen", False)            # rodando como .exe (PyInst
 PASTA_RECURSOS = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 SCRIPT_ARQ = PASTA_RECURSOS / SCRIPT_NOME
 ICONE_ARQ = PASTA_RECURSOS / "mayhembuild.ico"
+COMBOS_ARQ = PASTA_RECURSOS / "combos_arena.json"   # combos do canal King Nidhogg (Arena)
+
+
+def carregar_combos() -> list[dict]:
+    try:
+        return json.loads(COMBOS_ARQ.read_text(encoding="utf-8")).get("combos", [])
+    except Exception:
+        return []
+
+
+COMBOS = carregar_combos()
+ORDEM_FORCA = {"forte": 0, "boa": 1, "sorte": 2}
+
+
+def combos_de(nome: str) -> list[tuple[dict, str]]:
+    """[(combo, id do video)] em que o campeao aparece, do mais forte para o menos."""
+    alvo = slug(nome)
+    achados = []
+    for combo in COMBOS:
+        for campeao, video in combo.get("campeoes", {}).items():
+            if slug(campeao) == alvo and re.fullmatch(r"[\w-]{11}", video):
+                achados.append((combo, video))
+    achados.sort(key=lambda cv: ORDEM_FORCA.get(cv[0].get("forca"), 9))
+    return achados
 
 CONFIG_DIR = Path(os.environ.get("APPDATA", Path.home())) / APP
 CONFIG_FILE = CONFIG_DIR / "config.json"
@@ -206,6 +230,12 @@ class DadosSite:
         hab = str(b.get("habilidades", ""))
         limpo["habilidades"] = hab if re.fullmatch(r"[QWE]( > [QWE]){0,2}", hab) else ""
         return limpo if any(limpo.values()) else None
+
+    def tiers_cartas(self, nome: str, modo: str) -> dict[str, str]:
+        """{nome da cartinha em minusculas: tier} para esse campeao."""
+        with self.trava:
+            reg = self.cartas.get(site_de(modo), {}).get(slug(nome))
+        return {c["nome"].lower(): c["tier"] for c in (reg or {}).get("cartas", [])}
 
     def build_de(self, nome: str, modo: str) -> dict | None:
         with self.trava:
@@ -504,7 +534,7 @@ def baixar(url: str, timeout=10) -> bytes:
 
 
 # ---------------------------------------------------------------- worker ---
-VAZIO = {"meu": None, "build": None, "cartas": [], "banco": [], "aliados": [], "bans": [], "picks": [], "aviso": ""}
+VAZIO = {"meu": None, "build": None, "cartas": [], "combos": [], "banco": [], "aliados": [], "bans": [], "picks": [], "aviso": ""}
 
 
 class Observador(threading.Thread):
@@ -619,9 +649,20 @@ class Observador(threading.Thread):
         linhas = [nome, texto_site(self.site(cid), self.modo), self.hist.texto(cid, self.modo)]
         if destaque:
             linhas[0] = "★ " + nome
+        if self.modo == "CHERRY" and any(c.get("forca") == "forte" for c, _ in combos_de(nome)):
+            linhas.append("▶ tem combo")
         return {"id": cid, "nome": nome, "icone": self.icone(cid),
                 "texto": "\n".join(l for l in linhas if l), "url": url_build(nome, self.modo),
                 "destaque": destaque}
+
+    def montar_combos(self, cid: int) -> list[dict]:
+        """Combos do King Nidhogg para o seu campeao, com o tier de cada cartinha no METAsrc."""
+        nome = self.nome(cid)
+        tiers = DADOS.tiers_cartas(nome, self.modo)
+        return [{"nome": c["nome"], "forca": c.get("forca", ""), "dica": c.get("dica", ""),
+                 "cartinhas": [(a, tiers.get(a.lower(), "")) for a in c.get("cartinhas", [])],
+                 "video": f"https://www.youtube.com/watch?v={video}"}
+                for c, video in combos_de(nome)]
 
     def sugestoes(self, indisponiveis: set[int], para_ban: bool) -> list[int]:
         candidatos = [c for c in self.campeoes if c not in indisponiveis and self.site(c)
@@ -658,6 +699,7 @@ class Observador(threading.Thread):
         estado = {"meu": self.info(cid) if cid else None,
                   "cartas": DADOS.cartas_de(self.nome(cid), self.modo) if cid else [],
                   "build": self.montar_build(cid) if cid else None,
+                  "combos": self.montar_combos(cid) if cid and self.modo == "CHERRY" else [],
                   "banco": [self.info(b, b == melhor) for b in banco],
                   "aliados": [self.info(a) for a in aliados]}
 
@@ -811,6 +853,7 @@ class App:
         self.meu = self._secao("SEU CAMPEAO")
         self.build = self._secao("BUILD (METAsrc)")
         self.cartas = self._secao("CARTINHAS RECOMENDADAS (METAsrc, so na selecao)")
+        self.combos = self._secao("COMBOS DO KING NIDHOGG (Arena)", cor=BOM)
         self.banco = self._secao("BANCO (ordenado pelo tier, ★ = melhor que o seu)")
         self.aliados = self._secao("ALIADOS")
         # so aparecem na Arena com dados do site
@@ -908,6 +951,30 @@ class App:
                 return None
         return self.imagens[chave]
 
+    def render_combos(self, combos: list[dict]):
+        cores = {"forte": BOM, "boa": DESTAQUE, "sorte": APAGADO}
+        rotulos = {"forte": "FORTE", "boa": "BOA", "sorte": "SORTE"}
+        for i, c in enumerate(combos):
+            cor = cores.get(c["forca"], TEXTO)
+            tk.Label(self.combos, text=rotulos.get(c["forca"], ""), bg=CARTAO, fg=cor,
+                     font=("Segoe UI", 7, "bold"), anchor="nw").grid(row=i, column=0, sticky="nw",
+                                                                     padx=(8, 6), pady=(5, 0))
+            caixa = tk.Frame(self.combos, bg=CARTAO)
+            caixa.grid(row=i, column=1, sticky="w", pady=(3, 2))
+            cartas = "  +  ".join(f"{nome} ({tier})" if tier else nome for nome, tier in c["cartinhas"])
+            tk.Label(caixa, text=f"{c['nome']}:  {cartas}", bg=CARTAO, fg=TEXTO, font=("Segoe UI", 8, "bold"),
+                     anchor="w", justify="left", wraplength=420).pack(anchor="w")
+            if c["dica"]:
+                tk.Label(caixa, text=c["dica"], bg=CARTAO, fg=APAGADO, font=("Segoe UI", 8), anchor="w",
+                         justify="left", wraplength=420).pack(anchor="w")
+            tk.Button(self.combos, text="▶ video", command=lambda u=c["video"]: webbrowser.open(u),
+                      bg=CARTAO, fg=ALERTA, activebackground=FUNDO, activeforeground=ALERTA, relief="flat",
+                      font=("Segoe UI", 8, "bold"), cursor="hand2").grid(row=i, column=2, sticky="ne",
+                                                                          padx=(4, 8), pady=(3, 0))
+        tk.Label(self.combos, text="(tier) = tier da cartinha para este campeao no METAsrc",
+                 bg=CARTAO, fg=APAGADO, font=("Segoe UI", 7), anchor="w").grid(
+            row=len(combos), column=0, columnspan=3, sticky="w", padx=8, pady=(0, 4))
+
     def render_build(self, build: dict | None):
         if not build:
             tk.Label(self.build, text="ainda nao carregou: abra a build deste campeao (clique no icone acima)",
@@ -947,7 +1014,8 @@ class App:
                          padx=6, pady=4)
 
     def render(self, e: dict):
-        for quadro in (self.meu, self.build, self.cartas, self.banco, self.aliados, self.bans, self.picks):
+        for quadro in (self.meu, self.build, self.cartas, self.combos, self.banco, self.aliados, self.bans,
+                       self.picks):
             for w in quadro.winfo_children():
                 w.destroy()
         if e["meu"]:
@@ -975,6 +1043,11 @@ class App:
                          bg=CARTAO, fg=APAGADO, font=("Segoe UI", 8)).pack(anchor="w", padx=8, pady=6)
         else:
             self.cartas.master.pack_forget()
+        if e.get("combos"):
+            self.combos.master.pack(fill="x", after=self.cartas.master)
+            self.render_combos(e["combos"])
+        else:
+            self.combos.master.pack_forget()
         for quadro, lista in ((self.banco, e["banco"]), (self.aliados, e["aliados"]),
                               (self.bans, e["bans"]), (self.picks, e["picks"])):
             if lista:
@@ -986,6 +1059,8 @@ class App:
             self.banco.master.pack_forget()
         else:
             self.banco.master.pack(fill="x", after=self.cartas.master if e["meu"] else self.meu.master)
+        if not e.get("combos"):
+            self.combos.master.pack_forget()
         if e["bans"] or e["picks"]:
             self.area_arena.pack(fill="x", after=self.aliados.master)
         else:

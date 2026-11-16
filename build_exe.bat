@@ -8,6 +8,7 @@ py -m PyInstaller --noconfirm --onefile --windowed --name MayhemBuild ^
   --icon mayhembuild.ico ^
   --add-data "metasrc_para_painel.user.js;." ^
   --add-data "mayhembuild.ico;." ^
+  --add-data "combos_arena.json;." ^
   mayhem_build.pyw || goto erro
 
 echo.

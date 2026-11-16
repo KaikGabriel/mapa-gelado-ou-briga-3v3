@@ -1,0 +1,149 @@
+{
+  "fonte": "Titulos dos videos do canal King Nidhogg (youtube.com/@KingNidhogg), cruzados com os tiers do METAsrc no patch 26.22",
+  "atualizado": "2026-11-16",
+  "combos": [
+    {
+      "nome": "Tanque que acumula vida",
+      "cartinhas": ["Tank Engine", "Quest: Steel Your Heart", "Goliath"],
+      "forca": "forte",
+      "dica": "Acumula vida a cada rodada e bate de acordo com a vida maxima. A aposta mais segura da Arena.",
+      "campeoes": {
+        "Sion": "w2mvGLsj2xQ",
+        "Xin Zhao": "a2knrkFIp0o",
+        "Sett": "ApB7NaGBb-s",
+        "Tahm Kench": "LqqH-Yu0-N4",
+        "Dr. Mundo": "VRTlO1OxFP4",
+        "Smolder": "dbVSpaiRrYs"
+      }
+    },
+    {
+      "nome": "Habilidades com critico",
+      "cartinhas": ["Jeweled Gauntlet", "Glass Cannon", "Heavy Hitter"],
+      "forca": "forte",
+      "dica": "Jeweled Gauntlet faz as habilidades darem critico. Pegue sempre que aparecer em campeao de habilidade.",
+      "campeoes": {
+        "Jhin": "FWDpe2ROUL8",
+        "Cho'Gath": "zTgztWGM8Lk",
+        "Smolder": "AjkDNUvTXsk",
+        "Kai'Sa": "8nRBEM0c4ug",
+        "Malphite": "1TNTRMmuqs0",
+        "Darius": "YzqpGM4m8E0",
+        "Lee Sin": "2oAebYmFHpw",
+        "Sett": "YtQ4hDAcQCE",
+        "Fiddlesticks": "QF9oCb07y74",
+        "Aatrox": "zR2SKxlGZck",
+        "Dr. Mundo": "xyxFX0V1yZM"
+      }
+    },
+    {
+      "nome": "Velocidade de ataque e on-hit",
+      "cartinhas": ["Dual Wield", "Tap Dancer", "Fan the Hammer"],
+      "forca": "forte",
+      "dica": "Cada ataque aplica os efeitos varias vezes. Melhor em atiradores com muita velocidade de ataque.",
+      "campeoes": {
+        "Jinx": "JqIrKitgKEc",
+        "Aphelios": "9gl_iekDYLo",
+        "Kindred": "98iJAYKX6tM",
+        "Bel'Veth": "ZjIHm6Ix4DU",
+        "Viego": "Flf1fjIrp-c",
+        "Urgot": "YXzauem2dmw",
+        "Yunara": "1Ox5WqX0fAU"
+      }
+    },
+    {
+      "nome": "Vida e AP que crescem juntos",
+      "cartinhas": ["ADAPt", "Doomsayer", "Phenomenal Evil"],
+      "forca": "forte",
+      "dica": "Converte status e acumula AP sem parar. Swain e Mordekaiser estao entre os melhores da Arena.",
+      "campeoes": {
+        "Mordekaiser": "U10Jo-m3ywc",
+        "Swain": "6DF7eovHJrU",
+        "Tahm Kench": "oN4wrOsXnQM",
+        "Ezreal": "-n_uyNDx6aw",
+        "Brand": "8P4Wl_bDjSk"
+      }
+    },
+    {
+      "nome": "Queimadura e dano continuo",
+      "cartinhas": ["Vulnerability", "Infernal Conduit", "Firebrand"],
+      "forca": "forte",
+      "dica": "Dano ao longo do tempo que acumula e pode dar critico. Brand e o melhor usuario.",
+      "campeoes": {
+        "Brand": "2ABlgy5y7_s",
+        "Teemo": "3x1i69Fwm1M",
+        "Singed": "QeVSFp49Zzs",
+        "Twitch": "LxSLpDziunI",
+        "Smolder": "adDxfqiBNl4"
+      }
+    },
+    {
+      "nome": "Chuva de projeteis",
+      "cartinhas": ["Magic Missile", "Light 'Em Up!"],
+      "forca": "forte",
+      "dica": "Cada acerto solta projeteis extras. Bom em quem ataca ou conjura muitas vezes.",
+      "campeoes": {
+        "Kayle": "qgsowG44qK8",
+        "Miss Fortune": "R2HLLMaBE4M"
+      }
+    },
+    {
+      "nome": "Socos misticos",
+      "cartinhas": ["Mystic Punch"],
+      "forca": "forte",
+      "dica": "Ataques reduzem o tempo de recarga das habilidades: da para spammar tudo.",
+      "campeoes": {
+        "Smolder": "a5OpC9WNzdE",
+        "Bel'Veth": "qi95R8i37wI",
+        "Yasuo": "0WqBERaQE0Q"
+      }
+    },
+    {
+      "nome": "Escudos e cura que causam dano",
+      "cartinhas": ["Protein Shake", "Circle of Death"],
+      "forca": "boa",
+      "dica": "Escudos e curas viram dano. Bom em suportes e em quem se cura muito.",
+      "campeoes": {
+        "Udyr": "PRTTheffG6M",
+        "Soraka": "fu4_ktNl7LE"
+      }
+    },
+    {
+      "nome": "Draw Your Sword",
+      "cartinhas": ["Draw Your Sword"],
+      "forca": "boa",
+      "dica": "Vira corpo a corpo em troca de muito dano. Tier A: boa, mas nao esta entre as melhores.",
+      "campeoes": {
+        "Jhin": "Xdovhlo6gAY",
+        "Miss Fortune": "blGU-1cqlrk",
+        "Caitlyn": "0lDAk6qE6JE",
+        "Sivir": "SbJy9B_CxlU"
+      }
+    },
+    {
+      "nome": "Aceleracao de habilidade extrema",
+      "cartinhas": ["Purist Caster"],
+      "forca": "sorte",
+      "dica": "Ult quase sem recarga. Rende muito quando aparece, mas nao esta na lista atual do METAsrc.",
+      "campeoes": {
+        "Ashe": "ANuaCifosfE",
+        "Kai'Sa": "U4wpYxUxc54",
+        "Garen": "juJXY40iLxg",
+        "Karthus": "IC_tcDH6ajU",
+        "Alistar": "t-MrmyUO4HQ",
+        "Miss Fortune": "FpKChl0QnUg",
+        "Skarner": "nHPA8tyhDoA"
+      }
+    },
+    {
+      "nome": "Exercito de minions",
+      "cartinhas": ["Minionmancer"],
+      "forca": "sorte",
+      "dica": "Minions e invocacoes muito mais fortes. O canal adora, mas a cartinha esta em tier C.",
+      "campeoes": {
+        "Malzahar": "pqFew30Lnho",
+        "Shaco": "OOwUMmygCeE",
+        "Zyra": "5pBcl6C1sx4"
+      }
+    }
+  ]
+}

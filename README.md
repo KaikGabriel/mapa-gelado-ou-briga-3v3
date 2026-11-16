@@ -25,6 +25,7 @@
 | **Abre a build sozinho** | Quando você pega ou troca de campeão, a página certa do METAsrc abre no navegador: Mayhem ou Arena, conforme a fila. |
 | **Build no painel** | Mostra no próprio painel a build do seu campeão: feitiços, itens iniciais, os 7 itens na ordem de compra (com ícone e nome em português), a ordem para maximizar as habilidades e, na Arena, os itens prismáticos. |
 | **Cartinhas recomendadas** | Mostra as melhores cartinhas (Prismática, Ouro e Prata) do seu campeão, com o tier do METAsrc. Só aparece na seleção de campeões. |
+| **Combos do King Nidhogg (Arena)** | Se o seu campeão aparece num combo do canal [King Nidhogg](https://www.youtube.com/@KingNidhogg), o painel mostra as cartinhas do combo (com o tier delas para o seu campeão), uma dica e um botão para o vídeo. Nas listas, campeões com combo forte ganham a marca **▶ tem combo**. |
 | **Banco do ARAM** | Mostra os campeões do banco ordenados pelo tier. O que for mais forte que o seu ganha uma ★. Um clique abre a build. |
 | **Aliados** | Mostra os campeões do seu time (no ARAM dá para trocar com eles), com botão para abrir a build. |
 | **Sugestão de ban (Arena)** | Lista os campeões fortes e muito escolhidos que ainda não foram banidos nem escolhidos. Avisa quando é a sua vez de banir. |
@@ -103,7 +104,7 @@ O início com o Windows é a entrada `MayhemBuild` em `HKCU\Software\Microsoft\W
 ```bash
 build_exe.bat
 ```
-O script instala o [PyInstaller](https://pyinstaller.org/) e gera `dist\MayhemBuild.exe`, já com o ícone e o script do navegador dentro.
+O script instala o [PyInstaller](https://pyinstaller.org/) e gera `dist\MayhemBuild.exe`, já com o ícone, o script do navegador e os combos dentro.
 
 ## Segurança e regras da Riot
 
@@ -125,6 +126,7 @@ O script instala o [PyInstaller](https://pyinstaller.org/) e gera `dist\MayhemBu
 |---|---|
 | `mayhem_build.pyw` | O painel (código-fonte) |
 | `metasrc_para_painel.user.js` | O script do Tampermonkey |
+| `combos_arena.json` | Combos da Arena tirados dos vídeos do King Nidhogg. Dá para editar à mão: cada combo tem as cartinhas, a força (`forte`, `boa` ou `sorte`), uma dica e o vídeo de cada campeão |
 | `mayhembuild.ico` / `assets/icone.png` | O ícone |
 | `build_exe.bat` | Gera o `.exe` |
 | `MayhemBuild.ps1` / `MayhemBuild.bat` | Primeira versão, em PowerShell: só abre a build, sem painel |
