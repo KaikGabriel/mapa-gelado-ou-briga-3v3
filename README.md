@@ -52,7 +52,7 @@
 ### 1. O painel
 
 **Opção A: `.exe` (mais fácil)**
-1. Baixe o `MayhemBuild.exe` na página de [Releases](../../releases).
+1. Baixe o [`MayhemBuild.exe`](../../raw/main/MayhemBuild.exe) (fica na raiz do repositório).
 2. Coloque o arquivo numa pasta fixa, por exemplo `Documentos\MayhemBuild`, e abra com dois cliques.
 3. Na primeira vez, o Windows pode mostrar *"O Windows protegeu o computador"*. Isso acontece com qualquer `.exe` sem assinatura digital. Clique em **Mais informações → Executar assim mesmo**.
 
