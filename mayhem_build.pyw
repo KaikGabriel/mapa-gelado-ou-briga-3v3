@@ -4,7 +4,6 @@ Painel pequeno que acompanha a selecao de campeoes do League of Legends:
   * abre a build automaticamente quando voce pega/troca de campeao;
   * usa a pagina certa para o modo: Mayhem/ARAM ou Arena;
   * mostra os campeoes do banco do ARAM e dos aliados, um clique abre a build;
-  * seu historico com cada campeao (V/D no Mayhem, colocacao media na Arena);
   * tier/winrate do METAsrc, melhores picks e sugestao de ban (Arena), com os
     dados enviados pelo script "metasrc_para_painel.user.js" (Tampermonkey);
   * opcao de iniciar junto com o Windows.
@@ -73,16 +72,12 @@ def combos_de(nome: str) -> list[tuple[dict, str]]:
 
 CONFIG_DIR = Path(os.environ.get("APPDATA", Path.home())) / APP
 CONFIG_FILE = CONFIG_DIR / "config.json"
-HIST_FILE = CONFIG_DIR / "historico_mayhem.json"
-PADRAO = {"auto_abrir": True, "so_aram": True, "sempre_topo": True, "so_com_lol": True}
+PADRAO = {"auto_abrir": True, "so_aram": True, "sempre_topo": True, "so_com_lol": True,
+          "segundo_monitor": True}
 
 TIERS = ["S+", "S", "A", "B", "C", "D"]
 RARIDADES = [("Prismatic", "Prismatica"), ("Gold", "Ouro"), ("Silver", "Prata"), ("Item", "Item")]
 QTD_CARTAS = 5           # cartinhas mostradas por raridade
-# Picks da Arena: quanto o seu historico pesa (1 tier = 100). Colocacao media 1.5
-# em 5+ jogos = +100 (sobe um tier); media 5.5 = -100 (desce um tier).
-PESO_HIST_ARENA = 50
-JOGOS_PARA_PESO_TOTAL = 5
 
 # Nomes que o METAsrc escreve diferente
 EXCECOES = {"Jarvan IV": "jarvan", "Nunu & Willump": "nunu", "MonkeyKing": "wukong"}
@@ -463,68 +458,128 @@ def lcu(auth: tuple[str, str], caminho: str):
         raise
 
 
-class Historico:
-    """Suas partidas de Mayhem e Arena, guardadas em arquivo.
+# ------------------------------------------------------ segundo monitor ---
+NAVEGADORES = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe", "vivaldi.exe",
+               "arc.exe", "zen.exe", "librewolf.exe", "waterfox.exe", "chromium.exe", "yandex.exe"}
 
-    O cliente so mostra as ultimas 20 partidas, entao cada vez que o programa
-    roda ele junta as novas no arquivo e o historico vai crescendo.
+
+def _exe_da_janela(u32, k32, hwnd) -> str:
+    from ctypes import wintypes
+    import ctypes
+    pid = wintypes.DWORD()
+    u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    h = k32.OpenProcess(0x1000, False, pid.value)   # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return ""
+    try:
+        buf = ctypes.create_unicode_buffer(1024)
+        n = wintypes.DWORD(1024)
+        if k32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(n)):
+            return Path(buf.value).name.lower()
+    finally:
+        k32.CloseHandle(h)
+    return ""
+
+
+def mover_navegador_para_outro_monitor(espera: float = 5.0) -> None:
+    """Coloca a janela do navegador num monitor diferente do monitor do LoL.
+
+    Com um monitor so, nao faz nada. Se a janela ja esta no outro monitor, deixa onde esta.
     """
+    import ctypes
+    from ctypes import wintypes
+    u32 = ctypes.WinDLL("user32", use_last_error=True)
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.OpenProcess.restype = wintypes.HANDLE
+    u32.MonitorFromWindow.restype = wintypes.HMONITOR
+    u32.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
+    u32.GetForegroundWindow.restype = wintypes.HWND
+    u32.FindWindowW.restype = wintypes.HWND
+    try:   # coordenadas reais em telas com escala (125%, 150%...)
+        u32.SetThreadDpiAwarenessContext.restype = ctypes.c_void_p
+        u32.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))
+    except Exception:
+        pass
 
-    def __init__(self):
-        self.jogos: dict[str, dict] = {}
-        try:
-            self.jogos = json.loads(HIST_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+    class MONITORINFO(ctypes.Structure):
+        _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT),
+                    ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
 
-    def atualizar(self, auth) -> None:
-        try:
-            dados = lcu(auth, "/lol-match-history/v1/products/lol/current-summoner/matches"
-                              "?begIndex=0&endIndex=19")
-        except Exception:
-            return
-        novos = 0
-        for g in dados.get("games", {}).get("games", []):
-            modo = g.get("gameMode")
-            if modo not in MODOS or g.get("gameDuration", 0) < 240:  # ignora outros modos e remake
-                continue
-            gid = str(g["gameId"])
-            if gid in self.jogos or not g.get("participants"):
-                continue
-            p = g["participants"][0]
-            self.jogos[gid] = {"campeao": p["championId"], "vitoria": bool(p["stats"]["win"]),
-                               "modo": modo, "lugar": p["stats"].get("subteamPlacement", 0),
-                               "data": g.get("gameCreationDate", "")}
-            novos += 1
-        if novos:
-            try:
-                CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-                HIST_FILE.write_text(json.dumps(self.jogos), encoding="utf-8")
-            except Exception:
-                pass
+    monitores = []   # (handle, area util, principal?)
+    TIPO = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HMONITOR, wintypes.HDC,
+                              ctypes.POINTER(wintypes.RECT), wintypes.LPARAM)
 
-    def bonus_arena(self, cid: int) -> float:
-        """Bonus para os picks da Arena: positivo se voce costuma ficar bem colocado."""
-        lugares = [j["lugar"] for j in self.jogos.values()
-                   if j["campeao"] == cid and j.get("modo") == "CHERRY" and j.get("lugar")]
-        if not lugares:
-            return 0.0
-        media = sum(lugares) / len(lugares)
-        confianca = min(len(lugares), JOGOS_PARA_PESO_TOTAL) / JOGOS_PARA_PESO_TOTAL
-        return (3.5 - media) * PESO_HIST_ARENA * confianca
+    def cada(hmon, _hdc, _rc, _lp):
+        mi = MONITORINFO()
+        mi.cbSize = ctypes.sizeof(mi)
+        if u32.GetMonitorInfoW(hmon, ctypes.byref(mi)):
+            monitores.append((hmon, mi.rcWork, bool(mi.dwFlags & 1)))
+        return True
 
-    def texto(self, cid: int, modo: str) -> str:
-        """Resumo das suas partidas com esse campeao nesse modo."""
-        jogos = [j for j in self.jogos.values()
-                 if j["campeao"] == cid and j.get("modo", "KIWI") == modo]
-        if not jogos:
-            return "voce: nunca jogou"
-        if modo == "CHERRY":   # Arena: colocacao (1o a 6o) diz mais que vitoria
-            lugares = [j["lugar"] for j in jogos if j.get("lugar")]
-            if lugares:
-                return f"voce: {len(jogos)}j {sum(lugares) / len(lugares):.1f}º"
-        v = sum(j["vitoria"] for j in jogos)
-        return f"voce: {v}V {len(jogos) - v}D"
+    u32.EnumDisplayMonitors(None, None, TIPO(cada), 0)
+    if len(monitores) < 2:
+        return
+
+    # o monitor do LoL: o cliente (RCLIENT) ou o jogo; sem eles, o principal
+    lol = u32.FindWindowW("RCLIENT", None) or u32.FindWindowW("RiotWindowClass", None)
+    mon_lol = u32.MonitorFromWindow(lol, 2) if lol else next(m for m, _, p in monitores if p)
+    alvo = next(((m, r) for m, r, p in monitores if m != mon_lol and not p), None) \
+        or next(((m, r) for m, r, _ in monitores if m != mon_lol), None)
+    if not alvo:
+        return
+    mon_alvo, area = alvo
+
+    # espera a janela do navegador aparecer (normalmente vem para a frente)
+    janela = None
+    fim = time.time() + espera
+    while time.time() < fim and not janela:
+        h = u32.GetForegroundWindow()
+        if h and _exe_da_janela(u32, k32, h) in NAVEGADORES:
+            janela = h
+        else:
+            time.sleep(0.2)
+    if not janela:   # nao veio para a frente: pega a janela de navegador mais no topo
+        achadas = []
+        TIPO_J = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+        def cada_janela(h, _lp):
+            if (u32.IsWindowVisible(h) and u32.GetWindowTextLengthW(h)
+                    and not u32.GetWindow(h, 4)   # GW_OWNER: so janelas principais
+                    and _exe_da_janela(u32, k32, h) in NAVEGADORES):
+                achadas.append(h)
+                return False
+            return True
+
+        u32.EnumWindows(TIPO_J(cada_janela), 0)
+        janela = achadas[0] if achadas else None
+    if not janela or u32.MonitorFromWindow(janela, 2) == mon_alvo:
+        return
+
+    maximizada = bool(u32.IsZoomed(janela))
+    if maximizada or u32.IsIconic(janela):
+        u32.ShowWindow(janela, 9)    # SW_RESTORE
+    rc = wintypes.RECT()
+    u32.GetWindowRect(janela, ctypes.byref(rc))
+    lw, lh = area.right - area.left, area.bottom - area.top
+    w, h = min(rc.right - rc.left, lw), min(rc.bottom - rc.top, lh)
+    x, y = area.left + (lw - w) // 2, area.top + (lh - h) // 2
+    u32.SetWindowPos(janela, None, x, y, w, h, 0x0004 | 0x0010)   # SWP_NOZORDER | SWP_NOACTIVATE
+    if maximizada:
+        u32.ShowWindow(janela, 3)    # SW_MAXIMIZE
+
+
+def abrir(url: str, segundo_monitor: bool = True) -> None:
+    """Abre a pagina no navegador e, se der, joga a janela para o outro monitor."""
+    webbrowser.open(url)
+    if segundo_monitor and sys.platform == "win32":
+        threading.Thread(target=lambda: _sem_erro(mover_navegador_para_outro_monitor), daemon=True).start()
+
+
+def _sem_erro(f):
+    try:
+        f()
+    except Exception:
+        pass
 
 
 def baixar(url: str, timeout=10) -> bytes:
@@ -546,7 +601,6 @@ class Observador(threading.Thread):
         self.campeoes: dict[int, tuple[str, str]] = {}   # id -> (chave ddragon, nome)
         self.versao = None
         self.icones: dict[int, bytes] = {}
-        self.hist = Historico()
         self.modo = "KIWI"      # modo da selecao atual
         self.meus: set[int] = set()   # campeoes que voce pode jogar
         self.itens: dict[str, str] = {}                  # id do item -> nome (pt_BR)
@@ -646,7 +700,7 @@ class Observador(threading.Thread):
 
     def info(self, cid: int, destaque: bool = False) -> dict:
         nome = self.nome(cid)
-        linhas = [nome, texto_site(self.site(cid), self.modo), self.hist.texto(cid, self.modo)]
+        linhas = [nome, texto_site(self.site(cid), self.modo)]
         if destaque:
             linhas[0] = "★ " + nome
         if self.modo == "CHERRY" and any(c.get("forca") == "forte" for c, _ in combos_de(nome)):
@@ -672,8 +726,8 @@ class Observador(threading.Thread):
             def chave(c):
                 st = self.site(c)
                 return forca(st) * (st.get("pick", 1.0) ** 0.5)
-        else:   # site + o quanto VOCE vai bem com ele
-            chave = lambda c: forca(self.site(c)) + self.hist.bonus_arena(c)
+        else:   # so o que o site diz
+            chave = lambda c: forca(self.site(c))
         candidatos.sort(key=chave, reverse=True)
         return candidatos[:QTD_SUGESTOES]
 
@@ -752,7 +806,6 @@ class Observador(threading.Thread):
                     ultimo = None
                     self.carregar_campeoes(auth)
                     self.carregar_meus(auth)
-                    self.hist.atualizar(auth)
 
                 try:
                     sessao = lcu(auth, "/lol-champ-select/v1/session")
@@ -769,7 +822,6 @@ class Observador(threading.Thread):
                     continue
 
                 if fila_ok is None:          # entrou agora numa selecao
-                    self.hist.atualizar(auth)  # pega a partida que acabou de terminar
                     self.carregar_meus(auth)
                     try:
                         fluxo = lcu(auth, "/lol-gameflow/v1/session")
@@ -803,7 +855,7 @@ class Observador(threading.Thread):
                     candidato, desde = cid, time.time()
                 if (candidato and candidato != aberto and ativo and self.cfg["auto_abrir"]
                         and time.time() - desde >= ESPERA_TROCA):
-                    webbrowser.open(url_build(self.nome(candidato), self.modo))
+                    abrir(url_build(self.nome(candidato), self.modo), self.cfg["segundo_monitor"])
                     aberto = candidato
             except Exception:
                 auth, ultimo = None, None
@@ -860,10 +912,9 @@ class App:
         self.area_arena = tk.Frame(raiz, bg=FUNDO)
         self.area_arena.pack(fill="x")
         self.bans = self._secao("SUGESTAO DE BAN (fortes e muito escolhidos)", self.area_arena, ALERTA)
-        self.picks = self._secao("MELHORES PICKS (site + seu historico)", self.area_arena, BOM)
+        self.picks = self._secao("MELHORES PICKS (tier do site)", self.area_arena, BOM)
 
-        tk.Label(raiz, text="Tier = METAsrc. Na Arena: colocacao media (menor = melhor).\n"
-                            "voce = seu historico (V/D no Mayhem, jogos e colocacao na Arena).",
+        tk.Label(raiz, text="Tier = METAsrc. Na Arena: colocacao media (menor = melhor).",
                  bg=FUNDO, fg=APAGADO, font=("Segoe UI", 8), anchor="w", justify="left").pack(fill="x", padx=12)
 
         linha = tk.Frame(raiz, bg=FUNDO)
@@ -877,7 +928,7 @@ class App:
                  ("Atualizar Mayhem", TIER_URL.format(site="mayhem")),
                  ("Atualizar Arena", TIER_URL.format(site="arena"))]
         for rotulo, url in links:
-            tk.Button(botoes, text=rotulo, command=lambda u=url: webbrowser.open(u),
+            tk.Button(botoes, text=rotulo, command=lambda u=url: abrir(u, self.cfg["segundo_monitor"]),
                       bg=CARTAO, fg=TEXTO, activebackground=FUNDO, activeforeground=DESTAQUE,
                       relief="flat", font=("Segoe UI", 8), cursor="hand2", padx=8).pack(side="left", padx=(0, 6))
         tk.Button(botoes, text="Sair", command=self.sair, bg=CARTAO, fg=ALERTA, activebackground=FUNDO,
@@ -890,7 +941,8 @@ class App:
         for chave, texto in (("auto_abrir", "Abrir a build automaticamente"),
                              ("so_aram", "So no ARAM / Mayhem / Arena"),
                              ("sempre_topo", "Sempre por cima das janelas"),
-                             ("so_com_lol", "Aparecer so quando o LoL estiver aberto")):
+                             ("so_com_lol", "Aparecer so quando o LoL estiver aberto"),
+                             ("segundo_monitor", "Abrir o navegador no outro monitor")):
             v = tk.BooleanVar(value=self.cfg[chave])
             self.vars[chave] = v
             self._check(opcoes, texto, v, lambda c=chave: self.mudou(c), fonte)
@@ -967,7 +1019,7 @@ class App:
             if c["dica"]:
                 tk.Label(caixa, text=c["dica"], bg=CARTAO, fg=APAGADO, font=("Segoe UI", 8), anchor="w",
                          justify="left", wraplength=420).pack(anchor="w")
-            tk.Button(self.combos, text="▶ video", command=lambda u=c["video"]: webbrowser.open(u),
+            tk.Button(self.combos, text="▶ video", command=lambda u=c["video"]: abrir(u, self.cfg["segundo_monitor"]),
                       bg=CARTAO, fg=ALERTA, activebackground=FUNDO, activeforeground=ALERTA, relief="flat",
                       font=("Segoe UI", 8, "bold"), cursor="hand2").grid(row=i, column=2, sticky="ne",
                                                                           padx=(4, 8), pady=(3, 0))
@@ -990,7 +1042,7 @@ class App:
                 # numero na frente dos itens = ordem de compra
                 texto = f"{n + 1}. {p['nome']}" if rotulo == "Itens" else p["nome"]
                 tk.Button(fila, image=self.img_build(p), text=texto, compound="top",
-                          command=lambda u=p["url"]: webbrowser.open(u), bg=CARTAO, fg=TEXTO,
+                          command=lambda u=p["url"]: abrir(u, self.cfg["segundo_monitor"]), bg=CARTAO, fg=TEXTO,
                           activebackground=FUNDO, activeforeground=DESTAQUE, relief="flat", bd=0,
                           cursor="hand2", font=("Segoe UI", 7), wraplength=66, width=66,
                           padx=1, pady=1).pack(side="left", anchor="n", padx=1)
@@ -1006,7 +1058,7 @@ class App:
         texto = c["texto"].replace("\n", "   ", 1) if texto_lado else c["texto"]
         return tk.Button(pai, image=self.img(c, tamanho), text=texto,
                          compound="left" if texto_lado else "top", justify="left" if texto_lado else "center",
-                         command=lambda u=c["url"]: webbrowser.open(u),
+                         command=lambda u=c["url"]: abrir(u, self.cfg["segundo_monitor"]),
                          bg=CARTAO, fg=DESTAQUE if c.get("destaque") else TEXTO,
                          activebackground=FUNDO, activeforeground=DESTAQUE, relief="flat", bd=0,
                          cursor="hand2", font=("Segoe UI", 10 if texto_lado else 8,

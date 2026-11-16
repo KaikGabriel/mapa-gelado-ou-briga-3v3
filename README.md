@@ -29,8 +29,8 @@
 | **Banco do ARAM** | Mostra os campeões do banco ordenados pelo tier. O que for mais forte que o seu ganha uma ★. Um clique abre a build. |
 | **Aliados** | Mostra os campeões do seu time (no ARAM dá para trocar com eles), com botão para abrir a build. |
 | **Sugestão de ban (Arena)** | Lista os campeões fortes e muito escolhidos que ainda não foram banidos nem escolhidos. Avisa quando é a sua vez de banir. |
-| **Melhores picks (Arena)** | Junta o tier do site com a **sua** colocação média em cada campeão. Só lista campeões que você tem. |
-| **Seu histórico** | Mostra as suas vitórias e derrotas no Mayhem e a sua colocação média na Arena com cada campeão. |
+| **Melhores picks (Arena)** | Os campeões com melhor tier no site. Só lista campeões que você tem. |
+| **Navegador no outro monitor** | Se você tem dois monitores, a página da build abre no monitor em que o LoL **não** está. Com um monitor só, abre normal. |
 | **Liga junto com o LoL** | Inicia com o Windows escondido, aparece quando o cliente do LoL abre e some quando ele fecha. |
 
 ## Como funciona
@@ -38,12 +38,12 @@
 ```
  Cliente do LoL ──(API local do cliente)──►  MayhemBuild  ◄──(127.0.0.1:47914)── Script no navegador
  seleção, fila,                              painel                                (Tampermonkey)
- histórico                                     │                                   lê o METAsrc que
+ bans                                          │                                   lê o METAsrc que
                                                ▼                                   VOCÊ abriu
                                    abre a build no navegador
 ```
 
-- **Cliente do LoL:** o painel lê a seleção de campeões, a fila, o banco, os bans e o seu histórico pela API local que o próprio cliente deixa aberta no seu PC (a chamada LCU). Não usa login nem chave de API.
+- **Cliente do LoL:** o painel lê a seleção de campeões, a fila, o banco e os bans pela API local que o próprio cliente deixa aberta no seu PC (a chamada LCU). Não usa login nem chave de API.
 - **METAsrc:** o site bloqueia programas que tentam ler as páginas sozinhos. Por isso quem lê os dados é um script do Tampermonkey, **no seu navegador**, nas páginas que você mesmo abre. As builds que o painel abre já servem para isso. O script manda os dados para o painel pelo `127.0.0.1`, sem passar pela internet.
 - **Nomes e ícones:** vêm do [Data Dragon](https://developer.riotgames.com/docs/lol#data-dragon), da própria Riot.
 
@@ -84,6 +84,7 @@ Pronto. Embaixo dos botões, o painel mostra de qual patch são os dados e de qu
   - *Só no ARAM / Mayhem / Arena*: em ranqueada e normal não abre nada sozinho.
   - *Sempre por cima das janelas*
   - *Aparecer só quando o LoL estiver aberto*
+  - *Abrir o navegador no outro monitor*
   - *Iniciar junto com o Windows*
 
 ## Onde ficam os dados
@@ -93,7 +94,6 @@ Tudo fica em `%APPDATA%\MayhemBuild\`:
 | Arquivo | Conteúdo |
 |---|---|
 | `config.json` | Suas opções |
-| `historico_mayhem.json` | Suas partidas de Mayhem e Arena (cresce com o tempo, veja as limitações) |
 | `metasrc_mayhem.json` / `metasrc_arena.json` | Tiers e estatísticas do METAsrc |
 | `cartas_mayhem.json` / `cartas_arena.json` | Cartinhas e build de cada campeão |
 
@@ -115,7 +115,6 @@ O script instala o [PyInstaller](https://pyinstaller.org/) e gera `dist\MayhemBu
 
 ## Limitações
 
-- O cliente do LoL só mostra as **últimas 20 partidas**. O painel guarda as partidas que vê, então o histórico cresce enquanto ele está rodando.
 - No **Mayhem**, o METAsrc só publica o tier, sem winrate. Na **Arena** tem tier, nota, colocação média e taxas de pick e ban.
 - Se o METAsrc mudar o site, o script pode parar de ler os dados até ser ajustado.
 - Funciona só no Windows.
