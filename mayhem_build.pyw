@@ -853,7 +853,7 @@ class App:
         self.meu = self._secao("SEU CAMPEAO")
         self.build = self._secao("BUILD (METAsrc)")
         self.cartas = self._secao("CARTINHAS RECOMENDADAS (METAsrc, so na selecao)")
-        self.combos = self._secao("COMBOS DO KING NIDHOGG (Arena)", cor=BOM)
+        self.combos = self._secao('COMBOS DO KING NIDHOGG, o "Japonês do Arena"', cor=BOM)
         self.banco = self._secao("BANCO (ordenado pelo tier, ★ = melhor que o seu)")
         self.aliados = self._secao("ALIADOS")
         # so aparecem na Arena com dados do site
