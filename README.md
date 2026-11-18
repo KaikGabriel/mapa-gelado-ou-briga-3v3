@@ -25,7 +25,7 @@
 | **Abre a build sozinho** | Quando você pega ou troca de campeão, a página certa do METAsrc abre no navegador: Mayhem ou Arena, conforme a fila. |
 | **Build no painel** | Mostra no próprio painel a build do seu campeão: feitiços, itens iniciais, os 7 itens na ordem de compra (com ícone e nome em português), a ordem para maximizar as habilidades e, na Arena, os itens prismáticos. |
 | **Cartinhas recomendadas** | Mostra as melhores cartinhas (Prismática, Ouro e Prata) do seu campeão, com o tier do METAsrc. Só aparece na seleção de campeões. |
-| **Combos do King Nidhogg, o "Japonês do Arena"** | Se o seu campeão aparece num combo do canal [King Nidhogg](https://www.youtube.com/@KingNidhogg), o "Japonês do Arena", o painel mostra as cartinhas do combo (com o tier delas para o seu campeão), uma dica e um botão para o vídeo. Nas listas, campeões com combo forte ganham a marca **▶ tem combo**. |
+| **Combos do King Nidhogg, o "Japonês do Arena"** | Se o seu campeão aparece num combo do canal [King Nidhogg](https://www.youtube.com/@KingNidhogg), o "Japonês do Arena", o painel mostra as cartinhas do combo (com o tier delas para o seu campeão), uma dica e um botão para o vídeo. Na Arena, campeões com combo forte ganham a marca **▶ tem combo** nas listas. |
 | **Banco do ARAM** | Mostra os campeões do banco ordenados pelo tier. O que for mais forte que o seu ganha uma ★. Um clique abre a build. |
 | **Aliados** | Mostra os campeões do seu time (no ARAM dá para trocar com eles), com botão para abrir a build. |
 | **Sugestão de ban (Arena)** | Lista os campeões fortes e muito escolhidos que ainda não foram banidos nem escolhidos. Avisa quando é a sua vez de banir. |
@@ -46,6 +46,14 @@
 - **Cliente do LoL:** o painel lê a seleção de campeões, a fila, o banco e os bans pela API local que o próprio cliente deixa aberta no seu PC (a chamada LCU). Não usa login nem chave de API.
 - **METAsrc:** o site bloqueia programas que tentam ler as páginas sozinhos. Por isso quem lê os dados é um script do Tampermonkey, **no seu navegador**, nas páginas que você mesmo abre. As builds que o painel abre já servem para isso. O script manda os dados para o painel pelo `127.0.0.1`, sem passar pela internet.
 - **Nomes e ícones:** vêm do [Data Dragon](https://developer.riotgames.com/docs/lol#data-dragon), da própria Riot.
+
+## Requisitos
+
+- **Windows 10 ou 11.**
+- **League of Legends** instalado (o painel lê o cliente que está aberto no PC).
+- **Um navegador com a extensão [Tampermonkey](https://www.tampermonkey.net/)**: Chrome, Edge, Firefox, Brave, Opera ou Vivaldi.
+- **Python 3.10 ou mais novo**, só se for rodar pelo código em vez do `.exe`.
+- Dois monitores é opcional: com um só, o navegador abre normal.
 
 ## Instalação
 
@@ -105,6 +113,7 @@ O início com o Windows é a entrada `MayhemBuild` em `HKCU\Software\Microsoft\W
 build_exe.bat
 ```
 O script instala o [PyInstaller](https://pyinstaller.org/) e gera `dist\MayhemBuild.exe`, já com o ícone, o script do navegador e os combos dentro.
+Para atualizar o `.exe` que fica no repositório, copie o `dist\MayhemBuild.exe` para a raiz e faça o commit.
 
 ## Segurança e regras da Riot
 
@@ -118,6 +127,8 @@ O script instala o [PyInstaller](https://pyinstaller.org/) e gera `dist\MayhemBu
 - No **Mayhem**, o METAsrc só publica o tier, sem winrate. Na **Arena** tem tier, nota, colocação média e taxas de pick e ban.
 - Se o METAsrc mudar o site, o script pode parar de ler os dados até ser ajustado.
 - Funciona só no Windows.
+- O navegador só vai para o outro monitor se for um dos navegadores da lista de requisitos.
+- Versões antigas guardavam o seu histórico em `%APPDATA%\MayhemBuild\historico_mayhem.json`. Ele não é mais usado e pode ser apagado.
 
 ## Arquivos
 
@@ -128,6 +139,8 @@ O script instala o [PyInstaller](https://pyinstaller.org/) e gera `dist\MayhemBu
 | `combos_arena.json` | Combos da Arena tirados dos vídeos do King Nidhogg, o "Japonês do Arena". Dá para editar à mão: cada combo tem as cartinhas, a força (`forte`, `boa` ou `sorte`), uma dica e o vídeo de cada campeão |
 | `mayhembuild.ico` / `assets/icone.png` | O ícone |
 | `build_exe.bat` | Gera o `.exe` |
+| `MayhemBuild.exe` | O painel pronto para usar |
+| `NOTAS.md` | Decisões, armadilhas conhecidas e próximos passos (para quem for mexer no código) |
 | `MayhemBuild.ps1` / `MayhemBuild.bat` | Primeira versão, em PowerShell: só abre a build, sem painel |
 
 ---

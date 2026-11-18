@@ -3,10 +3,13 @@
 Painel pequeno que acompanha a selecao de campeoes do League of Legends:
   * abre a build automaticamente quando voce pega/troca de campeao;
   * usa a pagina certa para o modo: Mayhem/ARAM ou Arena;
+  * abre o navegador no monitor em que o LoL nao esta (quando ha dois);
+  * mostra a build (feiticos, itens, habilidades) e as melhores cartinhas;
+  * combos da Arena do canal King Nidhogg (arquivo combos_arena.json);
   * mostra os campeoes do banco do ARAM e dos aliados, um clique abre a build;
   * tier/winrate do METAsrc, melhores picks e sugestao de ban (Arena), com os
     dados enviados pelo script "metasrc_para_painel.user.js" (Tampermonkey);
-  * opcao de iniciar junto com o Windows.
+  * inicia junto com o Windows e aparece/some junto com o cliente do LoL.
 
 So usa a biblioteca padrao do Python. Rode com pythonw (sem janela preta):
     pyw mayhem_build.pyw
