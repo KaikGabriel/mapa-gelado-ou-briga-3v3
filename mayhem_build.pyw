@@ -560,11 +560,8 @@ def _exe_da_janela(u32, k32, hwnd) -> str:
     return ""
 
 
-def mover_navegador_para_outro_monitor(espera: float = 5.0) -> None:
-    """Coloca a janela do navegador num monitor diferente do monitor do LoL.
-
-    Com um monitor so, nao faz nada. Se a janela ja esta no outro monitor, deixa onde esta.
-    """
+def _win32():
+    """user32/kernel32 prontos para usar, com coordenadas reais em telas com escala (125%, 150%...)."""
     import ctypes
     from ctypes import wintypes
     u32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -572,13 +569,19 @@ def mover_navegador_para_outro_monitor(espera: float = 5.0) -> None:
     k32.OpenProcess.restype = wintypes.HANDLE
     u32.MonitorFromWindow.restype = wintypes.HMONITOR
     u32.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
-    u32.GetForegroundWindow.restype = wintypes.HWND
     u32.FindWindowW.restype = wintypes.HWND
-    try:   # coordenadas reais em telas com escala (125%, 150%...)
+    try:   # so nesta thread: o painel (tkinter) continua igual
         u32.SetThreadDpiAwarenessContext.restype = ctypes.c_void_p
         u32.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))
     except Exception:
         pass
+    return u32, k32
+
+
+def area_do_outro_monitor(u32):
+    """Area util de um monitor diferente do monitor do LoL, ou None se so tem um monitor."""
+    import ctypes
+    from ctypes import wintypes
 
     class MONITORINFO(ctypes.Structure):
         _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT),
@@ -597,68 +600,112 @@ def mover_navegador_para_outro_monitor(espera: float = 5.0) -> None:
 
     u32.EnumDisplayMonitors(None, None, TIPO(cada), 0)
     if len(monitores) < 2:
-        return
-
+        return None
     # o monitor do LoL: o cliente (RCLIENT) ou o jogo; sem eles, o principal
     lol = u32.FindWindowW("RCLIENT", None) or u32.FindWindowW("RiotWindowClass", None)
     mon_lol = u32.MonitorFromWindow(lol, 2) if lol else next(m for m, _, p in monitores if p)
-    alvo = next(((m, r) for m, r, p in monitores if m != mon_lol and not p), None) \
-        or next(((m, r) for m, r, _ in monitores if m != mon_lol), None)
-    if not alvo:
-        return
-    mon_alvo, area = alvo
-
-    # espera a janela do navegador aparecer (normalmente vem para a frente)
-    janela = None
-    fim = time.time() + espera
-    while time.time() < fim and not janela:
-        h = u32.GetForegroundWindow()
-        if h and _exe_da_janela(u32, k32, h) in NAVEGADORES:
-            janela = h
-        else:
-            time.sleep(0.2)
-    if not janela:   # nao veio para a frente: pega a janela de navegador mais no topo
-        achadas = []
-        TIPO_J = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-
-        def cada_janela(h, _lp):
-            if (u32.IsWindowVisible(h) and u32.GetWindowTextLengthW(h)
-                    and not u32.GetWindow(h, 4)   # GW_OWNER: so janelas principais
-                    and _exe_da_janela(u32, k32, h) in NAVEGADORES):
-                achadas.append(h)
-                return False
-            return True
-
-        u32.EnumWindows(TIPO_J(cada_janela), 0)
-        janela = achadas[0] if achadas else None
-    if not janela or u32.MonitorFromWindow(janela, 2) == mon_alvo:
-        return
-
-    maximizada = bool(u32.IsZoomed(janela))
-    if maximizada or u32.IsIconic(janela):
-        u32.ShowWindow(janela, 9)    # SW_RESTORE
-    rc = wintypes.RECT()
-    u32.GetWindowRect(janela, ctypes.byref(rc))
-    lw, lh = area.right - area.left, area.bottom - area.top
-    w, h = min(rc.right - rc.left, lw), min(rc.bottom - rc.top, lh)
-    x, y = area.left + (lw - w) // 2, area.top + (lh - h) // 2
-    u32.SetWindowPos(janela, None, x, y, w, h, 0x0004 | 0x0010)   # SWP_NOZORDER | SWP_NOACTIVATE
-    if maximizada:
-        u32.ShowWindow(janela, 3)    # SW_MAXIMIZE
+    alvo = next((r for m, r, p in monitores if m != mon_lol and not p), None) \
+        or next((r for m, r, _ in monitores if m != mon_lol), None)
+    return alvo
 
 
-def abrir(url: str, segundo_monitor: bool = True) -> None:
-    """Abre a pagina no navegador e, se der, joga a janela para o outro monitor."""
+def janelas_do_navegador(u32, k32, exe: str) -> list:
+    """Janelas principais visiveis desse navegador (em ordem: a mais no topo primeiro)."""
+    import ctypes
+    from ctypes import wintypes
+    achadas = []
+    TIPO = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def cada(h, _lp):
+        if (u32.IsWindowVisible(h) and u32.GetWindowTextLengthW(h)
+                and not u32.GetWindow(h, 4)   # GW_OWNER: so janelas principais
+                and _exe_da_janela(u32, k32, h) == exe):
+            achadas.append(h)
+        return True
+
+    u32.EnumWindows(TIPO(cada), 0)
+    return achadas
+
+
+def navegador_padrao() -> Path | None:
+    """O .exe do navegador padrao do Windows (so os navegadores conhecidos)."""
+    import winreg
+    progid = None
+    for chave in ("UserChoiceLatest", "UserChoice"):
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\Shell\Associations"
+                                rf"\UrlAssociations\https\{chave}") as k:
+                progid = winreg.QueryValueEx(k, "ProgId")[0]
+                break
+        except OSError:
+            continue
+    if not progid:
+        return None
+    try:
+        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, rf"{progid}\shell\open\command") as k:
+            comando = winreg.QueryValueEx(k, "")[0]
+    except OSError:
+        return None
+    m = re.match(r'\s*"([^"]+)"|\s*(\S+)', comando)
+    exe = Path(m.group(1) or m.group(2)) if m else None
+    if exe and exe.name.lower() in NAVEGADORES and exe.exists():
+        return exe
+    return None
+
+
+def abrir_janela_no_outro_monitor(url: str) -> bool:
+    """Abre a URL numa janela NOVA do navegador e coloca so essa janela no outro monitor.
+
+    As janelas que voce ja tinha abertas ficam onde estao. Devolve False quando nao da
+    (um monitor so, navegador desconhecido); ai quem chamou abre do jeito normal.
+    """
+    exe = navegador_padrao()
+    if not exe:
+        return False
+    u32, k32 = _win32()
+    area = area_do_outro_monitor(u32)
+    if area is None:
+        return False
+    nome = exe.name.lower()
+    antes = set(janelas_do_navegador(u32, k32, nome))
+    opcao = "-new-window" if nome in ("firefox.exe", "librewolf.exe", "waterfox.exe", "zen.exe") else "--new-window"
+    subprocess.Popen([str(exe), opcao, url], creationflags=SEM_JANELA)
+
+    nova, fim = None, time.time() + 8
+    while time.time() < fim and not nova:
+        time.sleep(0.2)
+        nova = next((h for h in janelas_do_navegador(u32, k32, nome) if h not in antes), None)
+    if not nova:
+        return True   # abriu, mas nao achamos a janela: melhor nao mexer em nada
+    u32.ShowWindow(nova, 9)    # SW_RESTORE (para poder mover)
+    u32.SetWindowPos(nova, None, area.left, area.top, area.right - area.left, area.bottom - area.top,
+                     0x0004)   # SWP_NOZORDER
+    u32.ShowWindow(nova, 3)    # SW_MAXIMIZE
+    return True
+
+
+def abrir(url: str) -> None:
+    """Links comuns (videos, tier list): abre no navegador do jeito normal."""
     webbrowser.open(url)
-    if segundo_monitor and sys.platform == "win32":
-        threading.Thread(target=lambda: _sem_erro(mover_navegador_para_outro_monitor), daemon=True).start()
 
 
 def abrir_build(url: str, segundo_monitor: bool = True) -> None:
-    """Build de campeao: troca a pagina da aba do METAsrc que ja esta aberta; sem aba, abre uma."""
+    """Build de campeao.
+
+    1. Se ja tem uma aba de build do METAsrc aberta, ela troca de pagina.
+    2. Senao, com dois monitores: abre uma janela nova so para a build, no outro monitor.
+    3. Senao: abre uma aba no navegador, como qualquer link.
+    """
     def tentar():
-        if not NAV.entregar(url):
-            abrir(url, segundo_monitor)
+        if NAV.entregar(url):
+            return
+        if segundo_monitor and sys.platform == "win32":
+            try:
+                if abrir_janela_no_outro_monitor(url):
+                    return
+            except Exception:
+                pass
+        webbrowser.open(url)
     threading.Thread(target=lambda: _sem_erro(tentar), daemon=True).start()
 
 
@@ -1015,7 +1062,7 @@ class App:
                  ("Atualizar Mayhem", TIER_URL.format(site="mayhem")),
                  ("Atualizar Arena", TIER_URL.format(site="arena"))]
         for rotulo, url in links:
-            tk.Button(botoes, text=rotulo, command=lambda u=url: abrir(u, self.cfg["segundo_monitor"]),
+            tk.Button(botoes, text=rotulo, command=lambda u=url: abrir(u),
                       bg=CARTAO, fg=TEXTO, activebackground=FUNDO, activeforeground=DESTAQUE,
                       relief="flat", font=("Segoe UI", 8), cursor="hand2", padx=8).pack(side="left", padx=(0, 6))
         tk.Button(botoes, text="Sair", command=self.sair, bg=CARTAO, fg=ALERTA, activebackground=FUNDO,
@@ -1029,7 +1076,7 @@ class App:
                              ("so_aram", "So no ARAM / Mayhem / Arena"),
                              ("sempre_topo", "Sempre por cima das janelas"),
                              ("so_com_lol", "Aparecer so quando o LoL estiver aberto"),
-                             ("segundo_monitor", "Abrir o navegador no outro monitor")):
+                             ("segundo_monitor", "Abrir a build numa janela no outro monitor")):
             v = tk.BooleanVar(value=self.cfg[chave])
             self.vars[chave] = v
             self._check(opcoes, texto, v, lambda c=chave: self.mudou(c), fonte)
@@ -1106,7 +1153,7 @@ class App:
             if c["dica"]:
                 tk.Label(caixa, text=c["dica"], bg=CARTAO, fg=APAGADO, font=("Segoe UI", 8), anchor="w",
                          justify="left", wraplength=420).pack(anchor="w")
-            tk.Button(self.combos, text="▶ video", command=lambda u=c["video"]: abrir(u, self.cfg["segundo_monitor"]),
+            tk.Button(self.combos, text="▶ video", command=lambda u=c["video"]: abrir(u),
                       bg=CARTAO, fg=ALERTA, activebackground=FUNDO, activeforeground=ALERTA, relief="flat",
                       font=("Segoe UI", 8, "bold"), cursor="hand2").grid(row=i, column=2, sticky="ne",
                                                                           padx=(4, 8), pady=(3, 0))
@@ -1129,7 +1176,7 @@ class App:
                 # numero na frente dos itens = ordem de compra
                 texto = f"{n + 1}. {p['nome']}" if rotulo == "Itens" else p["nome"]
                 tk.Button(fila, image=self.img_build(p), text=texto, compound="top",
-                          command=lambda u=p["url"]: abrir(u, self.cfg["segundo_monitor"]), bg=CARTAO, fg=TEXTO,
+                          command=lambda u=p["url"]: abrir(u), bg=CARTAO, fg=TEXTO,
                           activebackground=FUNDO, activeforeground=DESTAQUE, relief="flat", bd=0,
                           cursor="hand2", font=("Segoe UI", 7), wraplength=66, width=66,
                           padx=1, pady=1).pack(side="left", anchor="n", padx=1)

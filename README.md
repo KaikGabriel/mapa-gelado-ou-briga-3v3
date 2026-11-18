@@ -30,7 +30,7 @@
 | **Aliados** | Mostra os campeões do seu time (no ARAM dá para trocar com eles), com botão para abrir a build. |
 | **Sugestão de ban (Arena)** | Lista os campeões fortes e muito escolhidos que ainda não foram banidos nem escolhidos. Avisa quando é a sua vez de banir. |
 | **Melhores picks (Arena)** | Os campeões com melhor tier no site. Só lista campeões que você tem. |
-| **Navegador no outro monitor** | Se você tem dois monitores, a página da build abre no monitor em que o LoL **não** está. Com um monitor só, abre normal. |
+| **Build numa janela no outro monitor** | Se você tem dois monitores, a build abre numa **janela própria** do navegador, maximizada no monitor em que o LoL **não** está. As janelas que você já tinha abertas ficam onde estão. Com um monitor só, abre numa aba, como qualquer link. |
 | **Liga junto com o LoL** | Inicia com o Windows escondido, aparece quando o cliente do LoL abre e some quando ele fecha. |
 
 ## Como funciona
@@ -93,7 +93,7 @@ Pronto. Embaixo dos botões, o painel mostra de qual patch são os dados e de qu
   - *Só no ARAM / Mayhem / Arena*: em ranqueada e normal não abre nada sozinho.
   - *Sempre por cima das janelas*
   - *Aparecer só quando o LoL estiver aberto*
-  - *Abrir o navegador no outro monitor*
+  - *Abrir a build numa janela no outro monitor*
   - *Iniciar junto com o Windows*
 
 ## Onde ficam os dados
@@ -128,7 +128,7 @@ Para atualizar o `.exe` que fica no repositório, copie o `dist\MayhemBuild.exe`
 - No **Mayhem**, o METAsrc só publica o tier, sem winrate. Na **Arena** tem tier, nota, colocação média e taxas de pick e ban.
 - Se o METAsrc mudar o site, o script pode parar de ler os dados até ser ajustado.
 - Funciona só no Windows.
-- O navegador só vai para o outro monitor se for um dos navegadores da lista de requisitos.
+- A janela da build só vai para o outro monitor se o navegador padrão do Windows for um dos navegadores da lista de requisitos. Com outro navegador, a build abre numa aba.
 - A troca de campeão na mesma aba só funciona numa aba de **build** do METAsrc com o script ligado. Se você fechou essa aba, ou o navegador congelou a aba para economizar memória, o painel abre uma aba nova.
 - Versões antigas guardavam o seu histórico em `%APPDATA%\MayhemBuild\historico_mayhem.json`. Ele não é mais usado e pode ser apagado.
 

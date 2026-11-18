@@ -13,9 +13,13 @@ O uso e a instalação estão no [README.md](README.md).
 - **O histórico do jogador foi tirado** (2026-11-16) a pedido do usuário: o painel mostra só dados do site.
   Os picks da Arena usam só o tier. A lista de campeões que o jogador tem continua sendo usada para não sugerir
   campeão que ele não pode jogar. A ideia pode voltar no futuro.
-- **Navegador no outro monitor:** depois de abrir a página, o painel procura a janela do navegador
-  (a que vier para a frente ou, se nenhuma vier, a de navegador mais no topo) e a move para um monitor diferente
-  do monitor do cliente do LoL (janela `RCLIENT`), mantendo maximizada se estava. Com um monitor só, não faz nada.
+- **Build numa janela própria no outro monitor** (2026-11-18): a primeira versão movia a janela do navegador que
+  vinha para a frente, e isso levava a janela principal do usuário (com outras abas) para o segundo monitor.
+  Agora o painel lê o navegador padrão no registro (`UrlAssociations\https\UserChoice`), abre o .exe com
+  `--new-window` (`-new-window` no Firefox), acha a janela que não existia antes e move **só ela**, maximizada,
+  para um monitor diferente do monitor do cliente do LoL (janela `RCLIENT`). Nunca mexe em janelas que já existiam.
+  Com um monitor só ou navegador desconhecido, abre numa aba com `webbrowser.open`.
+  Vídeos e botões "Atualizar" abrem em aba comum; só a build usa a janela própria.
 - **Troca de campeão na mesma aba** (2026-11-18): para não abrir uma aba por campeão e gastar RAM.
   O script (1.3) numa aba de build deixa um pedido aberto em `GET /proxima` (o painel segura até 20 s).
   Ao trocar de campeão, o painel responde com a URL nova; a aba confirma em `GET /pegou?n=` e faz `location.href = url`.
@@ -47,7 +51,8 @@ O uso e a instalação estão no [README.md](README.md).
 ## Estado atual
 
 - Funciona: painel, build no painel, cartinhas, combos do King Nidhogg, banco/aliados, ban e picks da Arena,
-  início com o Windows ligado ao cliente do LoL, navegador no outro monitor (testado nos dois monitores do usuário).
+  início com o Windows ligado ao cliente do LoL, build numa janela própria no outro monitor
+  (testado no PC do usuário: as 2 janelas do Chrome que já existiam não se mexeram).
 - Troca na mesma aba: testada com o servidor do painel numa porta de teste e uma aba de verdade com o script dentro.
   Falta testar no Chrome do usuário com o Tampermonkey e o script 1.3 instalado.
 - Testado só com seleção simulada: a seleção de campeões real com o script 1.2 do Tampermonkey e os dados da Arena chegando.
