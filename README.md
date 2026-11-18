@@ -22,7 +22,7 @@
 
 | | |
 |---|---|
-| **Abre a build sozinho** | Quando você pega ou troca de campeão, a página certa do METAsrc abre no navegador: Mayhem ou Arena, conforme a fila. |
+| **Abre a build sozinho** | Quando você pega ou troca de campeão, a página certa do METAsrc abre no navegador: Mayhem ou Arena, conforme a fila. Se você trocar de campeão, **a mesma aba** troca para a build nova, em vez de abrir outra aba. |
 | **Build no painel** | Mostra no próprio painel a build do seu campeão: feitiços, itens iniciais, os 7 itens na ordem de compra (com ícone e nome em português), a ordem para maximizar as habilidades e, na Arena, os itens prismáticos. |
 | **Cartinhas recomendadas** | Mostra as melhores cartinhas (Prismática, Ouro e Prata) do seu campeão, com o tier do METAsrc. Só aparece na seleção de campeões. |
 | **Combos do King Nidhogg, o "Japonês do Arena"** | Se o seu campeão aparece num combo do canal [King Nidhogg](https://www.youtube.com/@KingNidhogg), o "Japonês do Arena", o painel mostra as cartinhas do combo (com o tier delas para o seu campeão), uma dica e um botão para o vídeo. Na Arena, campeões com combo forte ganham a marca **▶ tem combo** nas listas. |
@@ -44,7 +44,7 @@
 ```
 
 - **Cliente do LoL:** o painel lê a seleção de campeões, a fila, o banco e os bans pela API local que o próprio cliente deixa aberta no seu PC (a chamada LCU). Não usa login nem chave de API.
-- **METAsrc:** o site bloqueia programas que tentam ler as páginas sozinhos. Por isso quem lê os dados é um script do Tampermonkey, **no seu navegador**, nas páginas que você mesmo abre. As builds que o painel abre já servem para isso. O script manda os dados para o painel pelo `127.0.0.1`, sem passar pela internet.
+- **METAsrc:** o site bloqueia programas que tentam ler as páginas sozinhos. Por isso quem lê os dados é um script do Tampermonkey, **no seu navegador**, nas páginas que você mesmo abre. As builds que o painel abre já servem para isso. O script manda os dados para o painel pelo `127.0.0.1`, sem passar pela internet. A aba de build também fica esperando o painel avisar quando você troca de campeão.
 - **Nomes e ícones:** vêm do [Data Dragon](https://developer.riotgames.com/docs/lol#data-dragon), da própria Riot.
 
 ## Requisitos
@@ -78,7 +78,8 @@ Só usa a biblioteca padrão do Python, então não precisa instalar nada com `p
 2. **No Chrome e em outros navegadores baseados nele:** abra `chrome://extensions` → **Detalhes** do Tampermonkey e ligue **Permitir scripts de usuário**. Se essa opção não aparecer, ligue o *Modo do desenvolvedor* antes.
 3. No painel, clique em **Instalar script** e depois em **Instalar** na página do Tampermonkey.
    Também dá para abrir o [`metasrc_para_painel.user.js`](metasrc_para_painel.user.js) direto no Tampermonkey.
-4. No painel, clique em **Atualizar Mayhem** e **Atualizar Arena**. Quando o Tampermonkey perguntar sobre `127.0.0.1`, escolha **Sempre permitir**.
+4. Se você já tinha o script instalado, clique em **Instalar script** de novo depois de atualizar o painel: a troca de campeão na mesma aba precisa do script 1.3 ou mais novo.
+5. No painel, clique em **Atualizar Mayhem** e **Atualizar Arena**. Quando o Tampermonkey perguntar sobre `127.0.0.1`, escolha **Sempre permitir**.
 
 Pronto. Embaixo dos botões, o painel mostra de qual patch são os dados e de quando, por exemplo *"Arena: patch 26.22 (hoje)"*.
 
@@ -128,6 +129,7 @@ Para atualizar o `.exe` que fica no repositório, copie o `dist\MayhemBuild.exe`
 - Se o METAsrc mudar o site, o script pode parar de ler os dados até ser ajustado.
 - Funciona só no Windows.
 - O navegador só vai para o outro monitor se for um dos navegadores da lista de requisitos.
+- A troca de campeão na mesma aba só funciona numa aba de **build** do METAsrc com o script ligado. Se você fechou essa aba, ou o navegador congelou a aba para economizar memória, o painel abre uma aba nova.
 - Versões antigas guardavam o seu histórico em `%APPDATA%\MayhemBuild\historico_mayhem.json`. Ele não é mais usado e pode ser apagado.
 
 ## Arquivos

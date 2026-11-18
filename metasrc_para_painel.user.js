@@ -1,8 +1,10 @@
 // ==UserScript==
 // @name         METAsrc -> MayhemBuild
 // @namespace    mayhembuild
-// @version      1.2
-// @description  Quando voce abre uma pagina de Mayhem ou Arena no METAsrc, manda tiers/winrates, cartinhas e a build do campeao para o painel MayhemBuild no seu PC.
+// @version      1.3
+// @description  Quando voce abre uma pagina de Mayhem ou Arena no METAsrc, manda tiers/winrates, cartinhas e a build do campeao para o painel MayhemBuild no seu PC. Quando voce troca de campeao, a aba de build aberta troca de pagina em vez de abrir outra.
+// @updateURL    http://127.0.0.1:47914/metasrc_para_painel.user.js
+// @downloadURL  http://127.0.0.1:47914/metasrc_para_painel.user.js
 // @match        https://www.metasrc.com/lol/mayhem*
 // @match        https://www.metasrc.com/lol/arena*
 // @grant        GM_xmlhttpRequest
@@ -128,9 +130,38 @@
     enviar('/cartas', { modo: m[1], campeao: m[2], patch: patchDa(document), cartas, build });
   }
 
+  // ---------- trocar de campeao nesta mesma aba ----------
+  // A aba de build deixa um pedido aberto no painel. Quando voce pega outro campeao,
+  // o painel responde com a URL nova e a aba troca de pagina, em vez de abrir outra aba.
+  const URL_BUILD = /^https:\/\/www\.metasrc\.com\/lol\/(mayhem|arena)\/champions\/[a-z0-9-]+\/build/;
+  let ouvindo = false;
+
+  function ouvir() {
+    ouvindo = true;
+    GM_xmlhttpRequest({
+      method: 'GET',
+      url: PAINEL + '/proxima',
+      timeout: 30000,
+      onload: r => {
+        let pedido = {};
+        try { pedido = JSON.parse(r.responseText) || {}; } catch (e) { /* resposta estranha */ }
+        if (r.status === 200 && URL_BUILD.test(pedido.url || '')) {
+          // avisa o painel que esta aba pegou (senao ele abre uma aba nova)
+          GM_xmlhttpRequest({ method: 'GET', url: `${PAINEL}/pegou?n=${Number(pedido.n) || 0}`, timeout: 4000 });
+          location.href = pedido.url;
+          return;
+        }
+        if (r.status === 200) ouvir(); else setTimeout(ouvir, 5000);
+      },
+      ontimeout: () => ouvir(),
+      onerror: () => setTimeout(ouvir, 5000), // painel fechado: tenta de novo daqui a pouco
+    });
+  }
+
   function rodar() {
     enviarTiers().catch(() => {});
     enviarCartas();
+    if (!ouvindo && URL_BUILD.test(location.href)) ouvir();
   }
 
   rodar();

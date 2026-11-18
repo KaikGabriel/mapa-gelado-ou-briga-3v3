@@ -320,6 +320,58 @@ def texto_site(st: dict | None, modo: str) -> str:
 DADOS = DadosSite()
 
 
+class Navegacao:
+    """Manda o proximo campeao para uma aba de build do METAsrc que ja esta aberta.
+
+    O script do navegador fica com um pedido aberto em GET /proxima. Quando voce troca de
+    campeao, o painel responde esse pedido com a URL nova, a aba confirma em GET /pegou e
+    troca de pagina sozinha. Sem aba aberta (ou se ela nao confirmar), abre uma aba nova.
+    """
+
+    def __init__(self):
+        self.cond = threading.Condition()
+        self.pendente: tuple[int, str] | None = None   # (numero, url) esperando uma aba
+        self.confirmado = 0
+        self.numero = 0
+        self.esperando = 0          # abas com pedido aberto agora
+        self.ultimo_contato = 0.0   # entre um pedido e o proximo passa so um instante
+
+    def esperar(self, limite: float = 20.0) -> tuple[int, str] | None:
+        """Chamado pela aba: espera ate ter um campeao novo (ou ate o limite)."""
+        with self.cond:
+            self.esperando += 1
+            self.ultimo_contato = time.time()
+            try:
+                self.cond.wait_for(lambda: self.pendente is not None, timeout=limite)
+                pedido, self.pendente = self.pendente, None   # so uma aba leva
+                return pedido
+            finally:
+                self.esperando -= 1
+                self.ultimo_contato = time.time()
+
+    def confirmar(self, numero: int) -> None:
+        with self.cond:
+            self.confirmado = max(self.confirmado, numero)
+            self.cond.notify_all()
+
+    def entregar(self, url: str, limite: float = 2.5) -> bool:
+        """True se uma aba aberta pegou a URL; False se nao tem aba (ai abre uma nova)."""
+        with self.cond:
+            if not self.esperando and time.time() - self.ultimo_contato > 3:
+                return False
+            self.numero += 1
+            n = self.numero
+            self.pendente = (n, url)
+            self.cond.notify_all()
+            ok = self.cond.wait_for(lambda: self.confirmado >= n, timeout=limite)
+            if self.pendente and self.pendente[0] == n:
+                self.pendente = None
+            return ok
+
+
+NAV = Navegacao()
+
+
 class Receptor(BaseHTTPRequestHandler):
     """Recebe os dados do script do navegador (so de 127.0.0.1)."""
 
@@ -340,7 +392,31 @@ class Receptor(BaseHTTPRequestHandler):
         self.send_response(200 if ok else 400)
         self.end_headers()
 
+    def _json(self, dados: dict) -> None:
+        corpo = json.dumps(dados).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(corpo)))
+        self.end_headers()
+        self.wfile.write(corpo)
+
     def do_GET(self):
+        caminho, _, consulta = self.path.partition("?")
+        if caminho in ("/proxima", "/pegou"):
+            origem = self.headers.get("Origin")
+            if origem and origem != "https://www.metasrc.com":
+                self.send_error(403)
+                return
+            if caminho == "/proxima":   # a aba espera aqui pelo proximo campeao
+                pedido = NAV.esperar()
+                self._json({"n": pedido[0], "url": pedido[1]} if pedido else {})
+            else:
+                m = re.fullmatch(r"n=(\d{1,9})", consulta)
+                if m:
+                    NAV.confirmar(int(m.group(1)))
+                self._json({})
+            return
         # Abrir este endereco no navegador faz o Tampermonkey oferecer a instalacao
         if self.path != "/" + SCRIPT_NOME or not SCRIPT_ARQ.exists():
             self.send_error(404)
@@ -576,6 +652,14 @@ def abrir(url: str, segundo_monitor: bool = True) -> None:
     webbrowser.open(url)
     if segundo_monitor and sys.platform == "win32":
         threading.Thread(target=lambda: _sem_erro(mover_navegador_para_outro_monitor), daemon=True).start()
+
+
+def abrir_build(url: str, segundo_monitor: bool = True) -> None:
+    """Build de campeao: troca a pagina da aba do METAsrc que ja esta aberta; sem aba, abre uma."""
+    def tentar():
+        if not NAV.entregar(url):
+            abrir(url, segundo_monitor)
+    threading.Thread(target=lambda: _sem_erro(tentar), daemon=True).start()
 
 
 def _sem_erro(f):
@@ -858,7 +942,7 @@ class Observador(threading.Thread):
                     candidato, desde = cid, time.time()
                 if (candidato and candidato != aberto and ativo and self.cfg["auto_abrir"]
                         and time.time() - desde >= ESPERA_TROCA):
-                    abrir(url_build(self.nome(candidato), self.modo), self.cfg["segundo_monitor"])
+                    abrir_build(url_build(self.nome(candidato), self.modo), self.cfg["segundo_monitor"])
                     aberto = candidato
             except Exception:
                 auth, ultimo = None, None
@@ -1061,7 +1145,7 @@ class App:
         texto = c["texto"].replace("\n", "   ", 1) if texto_lado else c["texto"]
         return tk.Button(pai, image=self.img(c, tamanho), text=texto,
                          compound="left" if texto_lado else "top", justify="left" if texto_lado else "center",
-                         command=lambda u=c["url"]: abrir(u, self.cfg["segundo_monitor"]),
+                         command=lambda u=c["url"]: abrir_build(u, self.cfg["segundo_monitor"]),
                          bg=CARTAO, fg=DESTAQUE if c.get("destaque") else TEXTO,
                          activebackground=FUNDO, activeforeground=DESTAQUE, relief="flat", bd=0,
                          cursor="hand2", font=("Segoe UI", 10 if texto_lado else 8,

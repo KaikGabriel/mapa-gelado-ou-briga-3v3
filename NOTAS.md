@@ -16,6 +16,11 @@ O uso e a instalação estão no [README.md](README.md).
 - **Navegador no outro monitor:** depois de abrir a página, o painel procura a janela do navegador
   (a que vier para a frente ou, se nenhuma vier, a de navegador mais no topo) e a move para um monitor diferente
   do monitor do cliente do LoL (janela `RCLIENT`), mantendo maximizada se estava. Com um monitor só, não faz nada.
+- **Troca de campeão na mesma aba** (2026-11-18): para não abrir uma aba por campeão e gastar RAM.
+  O script (1.3) numa aba de build deixa um pedido aberto em `GET /proxima` (o painel segura até 20 s).
+  Ao trocar de campeão, o painel responde com a URL nova; a aba confirma em `GET /pegou?n=` e faz `location.href = url`.
+  Sem aba ouvindo, ou sem confirmação em 2,5 s, o painel abre uma aba nova (classe `Navegacao`, função `abrir_build`).
+  Usamos pedido longo em vez de `setInterval` porque o Chrome segura timers de abas em segundo plano.
 - **Só biblioteca padrão do Python** (tkinter, urllib, ctypes). Nada de `pip install` para rodar pelo código.
 - **O `.exe` fica commitado na raiz do repositório.** Não há `gh` no PC do usuário para criar Releases.
 - **Nomes de campeão vêm do Data Dragon em inglês** (o cliente em pt_BR devolve nomes traduzidos, que não batem
@@ -33,12 +38,18 @@ O uso e a instalação estão no [README.md](README.md).
 - Para gerar o `.exe` de novo, feche antes o `MayhemBuild.exe` que está rodando (ele fica escondido quando o LoL está fechado).
 - Coordenadas de monitor: a thread que move o navegador usa `SetThreadDpiAwarenessContext(-4)` para trabalhar em pixels reais
   com escala de tela. O tkinter continua sem DPI awareness, para não mudar o tamanho do painel.
+- Abas congeladas pelo navegador (economia de memória) podem pegar o pedido e não reagir. Por isso existe a confirmação:
+  sem ela, o painel abre uma aba nova.
+- O script instalado só se atualiza sozinho a partir da 1.3 (`@updateURL` aponta para o painel em `127.0.0.1:47914`).
+  Quem tem a 1.2 precisa clicar em **Instalar script** de novo.
 - O segundo monitor do usuário é vertical e fica à esquerda (coordenadas negativas).
 
 ## Estado atual
 
 - Funciona: painel, build no painel, cartinhas, combos do King Nidhogg, banco/aliados, ban e picks da Arena,
   início com o Windows ligado ao cliente do LoL, navegador no outro monitor (testado nos dois monitores do usuário).
+- Troca na mesma aba: testada com o servidor do painel numa porta de teste e uma aba de verdade com o script dentro.
+  Falta testar no Chrome do usuário com o Tampermonkey e o script 1.3 instalado.
 - Testado só com seleção simulada: a seleção de campeões real com o script 1.2 do Tampermonkey e os dados da Arena chegando.
 
 ## Próximos passos possíveis
