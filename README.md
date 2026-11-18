@@ -31,6 +31,7 @@
 | **Sugestão de ban (Arena)** | Lista os campeões fortes e muito escolhidos que ainda não foram banidos nem escolhidos. Avisa quando é a sua vez de banir. |
 | **Melhores picks (Arena)** | Os campeões com melhor tier no site. Só lista campeões que você tem. |
 | **Build numa janela no outro monitor** | Se você tem dois monitores, a build abre numa **janela própria** do navegador, maximizada no monitor em que o LoL **não** está. As janelas que você já tinha abertas ficam onde estão. Com um monitor só, abre numa aba, como qualquer link. |
+| **Ícone perto do relógio** | O MayhemBuild aparece nos ícones ocultos da barra de tarefas (a setinha ^ perto do relógio). Clique para mostrar ou esconder o painel; botão direito para **Mostrar painel** ou **Sair**. |
 | **Liga junto com o LoL** | Inicia com o Windows escondido, aparece quando o cliente do LoL abre e some quando ele fecha. |
 
 ## Como funciona
@@ -88,6 +89,7 @@ Pronto. Embaixo dos botões, o painel mostra de qual patch são os dados e de qu
 - **Clique em qualquer campeão** do painel para abrir a build dele.
 - **X da janela:** com o LoL aberto, só esconde o painel. Ele volta na próxima vez que o LoL abrir.
 - **Sair:** fecha de vez. Ele volta a ligar com o Windows.
+- **Ícone perto do relógio** (nos ícones ocultos, na setinha ^): um clique mostra ou esconde o painel. Com o botão direito tem **Mostrar painel** e **Sair**. Para deixar o ícone sempre visível, arraste-o para a barra de tarefas.
 - **Opções:**
   - *Abrir a build automaticamente*
   - *Só no ARAM / Mayhem / Arena*: em ranqueada e normal não abre nada sozinho.

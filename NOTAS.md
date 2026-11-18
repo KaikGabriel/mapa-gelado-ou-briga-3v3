@@ -25,6 +25,10 @@ O uso e a instalação estão no [README.md](README.md).
   Ao trocar de campeão, o painel responde com a URL nova; a aba confirma em `GET /pegou?n=` e faz `location.href = url`.
   Sem aba ouvindo, ou sem confirmação em 2,5 s, o painel abre uma aba nova (classe `Navegacao`, função `abrir_build`).
   Usamos pedido longo em vez de `setInterval` porque o Chrome segura timers de abas em segundo plano.
+- **Ícone na área de notificação** (2026-11-18): o usuário não achava o programa rodando escondido.
+  Classe `Bandeja`: `Shell_NotifyIconW` via ctypes, com janela invisível e fila de mensagens numa thread própria.
+  Ela não mexe no tkinter: manda "alternar", "mostrar" ou "sair" pela fila `pedidos_bandeja`, lida em `App.ler_fila`.
+  O Windows 11 põe ícones novos nos ícones ocultos por padrão, que é onde o usuário queria.
 - **Só biblioteca padrão do Python** (tkinter, urllib, ctypes). Nada de `pip install` para rodar pelo código.
 - **O `.exe` fica commitado na raiz do repositório.** Não há `gh` no PC do usuário para criar Releases.
 - **Nomes de campeão vêm do Data Dragon em inglês** (o cliente em pt_BR devolve nomes traduzidos, que não batem
@@ -46,6 +50,8 @@ O uso e a instalação estão no [README.md](README.md).
   sem ela, o painel abre uma aba nova.
 - O script instalado só se atualiza sozinho a partir da 1.3 (`@updateURL` aponta para o painel em `127.0.0.1:47914`).
   Quem tem a 1.2 precisa clicar em **Instalar script** de novo.
+- `Bandeja`: guarde a referência do `WNDPROC` (`self._proc`), senão o Python apaga o callback e o programa fecha.
+  Se o Explorer reiniciar, o ícone volta pela mensagem `TaskbarCreated`.
 - O segundo monitor do usuário é vertical e fica à esquerda (coordenadas negativas).
 
 ## Estado atual

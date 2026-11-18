@@ -1007,6 +1007,163 @@ FUNDO, CARTAO, TEXTO, APAGADO, DESTAQUE, ALERTA, BOM = (
 COR_RARIDADE = {"Prismatica": "#c58af9", "Ouro": "#e3b341", "Prata": "#adbac7", "Item": "#6cb6ff"}
 
 
+# ------------------------------------------------- icone perto do relogio ---
+class Bandeja(threading.Thread):
+    """Icone do MayhemBuild na area de notificacao (perto do relogio / icones ocultos).
+
+    Clique: mostra ou esconde o painel. Botao direito: menu com "Mostrar painel" e "Sair".
+    Roda numa thread propria com a fila de mensagens do Windows; avisa o painel pela
+    fila `pedidos` ("alternar", "mostrar", "sair"), porque o tkinter so pode ser usado
+    na thread dele.
+    """
+
+    WM_BANDEJA = 0x8001          # WM_APP + 1: mensagem que o Windows manda quando mexem no icone
+    ID_MOSTRAR, ID_SAIR = 1, 2
+
+    def __init__(self, pedidos: queue.Queue, dica: str = APP):
+        super().__init__(daemon=True)
+        self.pedidos, self.dica = pedidos, dica
+        self.hwnd = None
+        self.pronto = threading.Event()
+
+    def _dados(self):
+        import ctypes
+        from ctypes import wintypes
+
+        class NOTIFYICONDATAW(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.DWORD), ("hWnd", wintypes.HWND), ("uID", wintypes.UINT),
+                        ("uFlags", wintypes.UINT), ("uCallbackMessage", wintypes.UINT),
+                        ("hIcon", wintypes.HICON), ("szTip", ctypes.c_wchar * 128),
+                        ("dwState", wintypes.DWORD), ("dwStateMask", wintypes.DWORD),
+                        ("szInfo", ctypes.c_wchar * 256), ("uVersion", wintypes.UINT),
+                        ("szInfoTitle", ctypes.c_wchar * 64), ("dwInfoFlags", wintypes.DWORD),
+                        ("guidItem", ctypes.c_byte * 16), ("hBalloonIcon", wintypes.HICON)]
+
+        nid = NOTIFYICONDATAW()
+        nid.cbSize = ctypes.sizeof(nid)
+        nid.hWnd = self.hwnd
+        nid.uID = 1
+        nid.uFlags = 0x1 | 0x2 | 0x4          # NIF_MESSAGE | NIF_ICON | NIF_TIP
+        nid.uCallbackMessage = self.WM_BANDEJA
+        nid.hIcon = self.icone
+        nid.szTip = self.dica[:127]
+        return nid
+
+    def run(self):
+        try:
+            self._rodar()
+        except Exception:
+            self.pronto.set()
+
+    def _rodar(self):
+        import ctypes
+        from ctypes import wintypes
+        u32 = ctypes.WinDLL("user32", use_last_error=True)
+        shell = ctypes.WinDLL("shell32", use_last_error=True)
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        LRESULT = ctypes.c_ssize_t
+        WNDPROC = ctypes.WINFUNCTYPE(LRESULT, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+        u32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+        u32.DefWindowProcW.restype = LRESULT
+        u32.CreateWindowExW.restype = wintypes.HWND
+        u32.CreateWindowExW.argtypes = [wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD,
+                                        ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                        wintypes.HWND, wintypes.HMENU, wintypes.HINSTANCE, wintypes.LPVOID]
+        u32.LoadImageW.restype = wintypes.HANDLE
+        u32.LoadImageW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT,
+                                   ctypes.c_int, ctypes.c_int, wintypes.UINT]
+        u32.LoadIconW.restype = wintypes.HICON
+        u32.LoadIconW.argtypes = [wintypes.HINSTANCE, wintypes.LPVOID]
+        u32.CreatePopupMenu.restype = wintypes.HMENU
+        u32.AppendMenuW.argtypes = [wintypes.HMENU, wintypes.UINT, ctypes.c_size_t, wintypes.LPCWSTR]
+        u32.TrackPopupMenu.argtypes = [wintypes.HMENU, wintypes.UINT, ctypes.c_int, ctypes.c_int,
+                                       ctypes.c_int, wintypes.HWND, wintypes.LPVOID]
+        u32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+        k32.GetModuleHandleW.restype = wintypes.HMODULE
+        shell.Shell_NotifyIconW.argtypes = [wintypes.DWORD, ctypes.c_void_p]
+
+        # icone: o do programa; sem ele, o icone padrao do Windows
+        self.icone = None
+        if ICONE_ARQ.exists():
+            tam = u32.GetSystemMetrics(49)   # SM_CXSMICON (16 px, ou mais com escala de tela)
+            self.icone = u32.LoadImageW(None, str(ICONE_ARQ), 1, tam, tam, 0x10)   # IMAGE_ICON, LR_LOADFROMFILE
+        if not self.icone:
+            self.icone = u32.LoadIconW(None, ctypes.c_void_p(32512))   # IDI_APPLICATION
+
+        taskbar_criada = u32.RegisterWindowMessageW("TaskbarCreated")   # o Explorer reiniciou
+
+        def menu(hwnd):
+            m = u32.CreatePopupMenu()
+            u32.AppendMenuW(m, 0, self.ID_MOSTRAR, "Mostrar painel")
+            u32.AppendMenuW(m, 0x800, 0, None)   # MF_SEPARATOR
+            u32.AppendMenuW(m, 0, self.ID_SAIR, "Sair")
+            pt = wintypes.POINT()
+            u32.GetCursorPos(ctypes.byref(pt))
+            u32.SetForegroundWindow(hwnd)        # sem isso o menu nao fecha ao clicar fora
+            escolha = u32.TrackPopupMenu(m, 0x0100 | 0x0002, pt.x, pt.y, 0, hwnd, None)   # TPM_RETURNCMD|RIGHTBUTTON
+            u32.PostMessageW(hwnd, 0, 0, 0)       # WM_NULL
+            u32.DestroyMenu(m)
+            if escolha == self.ID_MOSTRAR:
+                self.pedidos.put("mostrar")
+            elif escolha == self.ID_SAIR:
+                self.pedidos.put("sair")
+
+        def proc(hwnd, msg, wp, lp):
+            if msg == self.WM_BANDEJA:
+                evento = lp & 0xFFFF
+                if evento == 0x0202:      # WM_LBUTTONUP: clique
+                    self.pedidos.put("alternar")
+                elif evento == 0x0205:    # WM_RBUTTONUP: botao direito
+                    menu(hwnd)
+                return 0
+            if msg == taskbar_criada:     # Explorer reiniciou: poe o icone de novo
+                shell.Shell_NotifyIconW(0, ctypes.byref(self._dados()))
+                return 0
+            if msg == 0x0010:             # WM_CLOSE (pedido pelo painel ao sair)
+                shell.Shell_NotifyIconW(2, ctypes.byref(self._dados()))   # NIM_DELETE
+                u32.DestroyWindow(hwnd)
+                return 0
+            if msg == 0x0002:             # WM_DESTROY
+                u32.PostQuitMessage(0)
+                return 0
+            return u32.DefWindowProcW(hwnd, msg, wp, lp)
+
+        self._proc = WNDPROC(proc)        # guarda a referencia: sem isso o Python apaga e o programa cai
+
+        class WNDCLASSW(ctypes.Structure):
+            _fields_ = [("style", wintypes.UINT), ("lpfnWndProc", WNDPROC), ("cbClsExtra", ctypes.c_int),
+                        ("cbWndExtra", ctypes.c_int), ("hInstance", wintypes.HINSTANCE),
+                        ("hIcon", wintypes.HICON), ("hCursor", wintypes.HANDLE),
+                        ("hbrBackground", wintypes.HBRUSH), ("lpszMenuName", wintypes.LPCWSTR),
+                        ("lpszClassName", wintypes.LPCWSTR)]
+
+        inst = k32.GetModuleHandleW(None)
+        wc = WNDCLASSW()
+        wc.lpfnWndProc = self._proc
+        wc.hInstance = inst
+        wc.lpszClassName = "MayhemBuildBandeja"
+        u32.RegisterClassW(ctypes.byref(wc))
+        # janela invisivel: so recebe as mensagens do icone
+        self.hwnd = u32.CreateWindowExW(0, "MayhemBuildBandeja", APP, 0, 0, 0, 0, 0, None, None, inst, None)
+        if not self.hwnd:
+            self.pronto.set()
+            return
+        shell.Shell_NotifyIconW(0, ctypes.byref(self._dados()))   # NIM_ADD
+        self.pronto.set()
+
+        msg = wintypes.MSG()
+        while u32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+            u32.TranslateMessage(ctypes.byref(msg))
+            u32.DispatchMessageW(ctypes.byref(msg))
+
+    def fechar(self):
+        """Tira o icone (chamado ao sair do programa)."""
+        if self.hwnd:
+            import ctypes
+            ctypes.WinDLL("user32").PostMessageW(self.hwnd, 0x0010, 0, 0)   # WM_CLOSE
+            self.join(2)
+
+
 class App:
     def __init__(self, raiz: tk.Tk, auto: bool = False):
         self.raiz = raiz
@@ -1020,6 +1177,11 @@ class App:
         if auto and self.cfg["so_com_lol"]:
             raiz.withdraw()
         raiz.protocol("WM_DELETE_WINDOW", self.fechar)
+        self.pedidos_bandeja: queue.Queue = queue.Queue()
+        self.bandeja = None
+        if sys.platform == "win32":
+            self.bandeja = Bandeja(self.pedidos_bandeja)
+            self.bandeja.start()
         try:
             raiz.iconbitmap(default=str(ICONE_ARQ))
         except Exception:
@@ -1262,9 +1424,27 @@ class App:
             self.sair()
 
     def sair(self):
+        if self.bandeja:
+            self.bandeja.fechar()
         self.raiz.destroy()
 
+    def mostrar(self):
+        self.fechado = False
+        self.raiz.deiconify()
+        self.raiz.lift()
+        self.raiz.focus_force()
+
     def ler_fila(self):
+        while not self.pedidos_bandeja.empty():   # cliques no icone perto do relogio
+            pedido = self.pedidos_bandeja.get_nowait()
+            if pedido == "sair":
+                self.sair()
+                return
+            if pedido == "alternar" and self.raiz.state() != "withdrawn":
+                self.fechado = True
+                self.raiz.withdraw()
+            else:
+                self.mostrar()
         estado = None
         while not self.fila.empty():
             estado = self.fila.get_nowait()
