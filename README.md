@@ -23,7 +23,7 @@
 | | |
 |---|---|
 | **Abre a build sozinho** | Quando você pega ou troca de campeão, a página certa do METAsrc abre no navegador: Mayhem ou Arena, conforme a fila. Se você trocar de campeão, **a mesma aba** troca para a build nova, em vez de abrir outra aba. |
-| **Build no painel** | Mostra no próprio painel a build do seu campeão: feitiços, itens iniciais, os 7 itens na ordem de compra (com ícone e nome em português), a ordem para maximizar as habilidades e, na Arena, os itens prismáticos. |
+| **Build no painel** | Mostra no próprio painel a build do seu campeão: feitiços, itens iniciais, os 7 itens na ordem de compra (com ícone e nome em português), a ordem para maximizar as habilidades e, na Arena, os itens prismáticos. A build **continua no painel durante a partida** e some quando o jogo acaba. |
 | **Cartinhas recomendadas** | Mostra as melhores cartinhas (Prismática, Ouro e Prata) do seu campeão, com o tier do METAsrc. Só aparece na seleção de campeões. |
 | **Combos do King Nidhogg, o "Japonês do Arena"** | Se o seu campeão aparece num combo do canal [King Nidhogg](https://www.youtube.com/@KingNidhogg), o "Japonês do Arena", o painel mostra as cartinhas do combo (com o tier delas para o seu campeão), uma dica e um botão para o vídeo. Na Arena, campeões com combo forte ganham a marca **▶ tem combo** nas listas. |
 | **Banco do ARAM** | Mostra os campeões do banco ordenados pelo tier. O que for mais forte que o seu ganha uma ★. Um clique abre a build. |
@@ -122,7 +122,7 @@ Para atualizar o `.exe` que fica no repositório, copie o `dist\MayhemBuild.exe`
 
 - O painel só escuta em `127.0.0.1`, então nenhum outro computador consegue falar com ele. Ele só aceita dados vindos do `https://www.metasrc.com` e confere o formato antes de salvar.
 - Ele **não joga por você**: não escolhe campeão, não bane, não compra itens e não escolhe cartinhas. Só mostra informações e abre páginas.
-- As cartinhas recomendadas **só aparecem na seleção de campeões**. Durante a partida o painel não mostra nada, porque a Riot não permite programas que indicam o que escolher dentro do jogo.
+- As cartinhas recomendadas e os combos **só aparecem na seleção de campeões**. Durante a partida o painel mostra só o seu campeão e a build (feitiços, itens e habilidades), porque a Riot não permite programas que indicam qual cartinha escolher dentro do jogo.
 - Para os dados do METAsrc, o script só lê as páginas que você mesmo abre no navegador. O painel não acessa o site sozinho.
 
 ## Limitações

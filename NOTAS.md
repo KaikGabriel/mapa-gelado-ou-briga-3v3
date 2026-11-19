@@ -29,6 +29,11 @@ O uso e a instalação estão no [README.md](README.md).
   Classe `Bandeja`: `Shell_NotifyIconW` via ctypes, com janela invisível e fila de mensagens numa thread própria.
   Ela não mexe no tkinter: manda "alternar", "mostrar" ou "sair" pela fila `pedidos_bandeja`, lida em `App.ler_fila`.
   O Windows 11 põe ícones novos nos ícones ocultos por padrão, que é onde o usuário queria.
+- **Build no painel durante a partida** (2026-11-18): o painel guarda o campeão da seleção (`campeao_da_partida`).
+  Fora da seleção, lê `/lol-gameflow/v1/gameflow-phase`: em `GameStart`, `InProgress` ou `Reconnect` mostra só o
+  campeão e a build (`em_partida=True` esconde cartinhas, combos, banco e aliados). Em qualquer outra fase
+  (`WaitingForStats`, `EndOfGame`, `Lobby`...) esquece o campeão e volta a esperar a seleção.
+  Cartinhas e combos ficam fora da partida pela regra da Riot sobre recomendar escolhas dentro do jogo.
 - **Só biblioteca padrão do Python** (tkinter, urllib, ctypes). Nada de `pip install` para rodar pelo código.
 - **O `.exe` fica commitado na raiz do repositório.** Não há `gh` no PC do usuário para criar Releases.
 - **Nomes de campeão vêm do Data Dragon em inglês** (o cliente em pt_BR devolve nomes traduzidos, que não batem
@@ -52,6 +57,7 @@ O uso e a instalação estão no [README.md](README.md).
   Quem tem a 1.2 precisa clicar em **Instalar script** de novo.
 - `Bandeja`: guarde a referência do `WNDPROC` (`self._proc`), senão o Python apaga o callback e o programa fecha.
   Se o Explorer reiniciar, o ícone volta pela mensagem `TaskbarCreated`.
+- Se o painel for aberto com a partida já rolando, ele não sabe o campeão (não passou pela seleção) e não mostra build.
 - O segundo monitor do usuário é vertical e fica à esquerda (coordenadas negativas).
 
 ## Estado atual

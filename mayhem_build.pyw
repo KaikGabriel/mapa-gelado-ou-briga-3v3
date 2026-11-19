@@ -43,6 +43,8 @@ ESPERA_TROCA = 1.5       # segundos com o mesmo campeao antes de abrir a pagina
 LOCK_PORT = 47913        # impede abrir dois programas ao mesmo tempo
 DADOS_PORT = 47914       # onde o script do navegador entrega os dados do site
 QTD_SUGESTOES = 5
+# fases do cliente em que a partida esta rolando: o painel continua mostrando a build
+EM_PARTIDA = {"GameStart", "InProgress", "Reconnect"}
 SCRIPT_NOME = "metasrc_para_painel.user.js"          # fica na mesma pasta deste programa
 CONGELADO = getattr(sys, "frozen", False)            # rodando como .exe (PyInstaller)
 PASTA_RECURSOS = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
@@ -740,6 +742,7 @@ class Observador(threading.Thread):
         self.itens: dict[str, str] = {}                  # id do item -> nome (pt_BR)
         self.feiticos: dict[str, tuple[str, str]] = {}   # id do feitico -> (chave ddragon, nome)
         self.imgs_build: dict[str, bytes | None] = {}
+        self.campeao_da_partida = 0   # o campeao que voce fechou na selecao
 
     # dados dos campeoes (nomes em ingles + icones)
     def carregar_campeoes(self, auth):
@@ -948,9 +951,23 @@ class Observador(threading.Thread):
 
                 if not sessao:
                     aberto = candidato = 0
-                    if fila_ok is not None or ultimo != ("fora", DADOS.versao):
-                        ultimo = ("fora", DADOS.versao)
-                        self.enviar("Conectado. Esperando a selecao de campeoes...")
+                    try:
+                        fase = lcu(auth, "/lol-gameflow/v1/gameflow-phase")
+                    except Exception:
+                        fase = ""
+                    cid = self.campeao_da_partida
+                    if fase in EM_PARTIDA and cid:
+                        # partida rolando: so a build (cartinhas e combos ficam so na selecao)
+                        if ultimo != ("jogo", cid, DADOS.versao):
+                            ultimo = ("jogo", cid, DADOS.versao)
+                            self.enviar(f"Em partida: {self.nome(cid)}", meu=self.info(cid),
+                                        build=self.montar_build(cid), modo=self.modo, em_partida=True)
+                    else:
+                        if fase != "ChampSelect":   # a partida acabou (ou nem comecou)
+                            self.campeao_da_partida = 0
+                        if fila_ok is not None or ultimo != ("fora", DADOS.versao):
+                            ultimo = ("fora", DADOS.versao)
+                            self.enviar("Conectado. Esperando a selecao de campeoes...")
                     fila_ok = None
                     time.sleep(1)
                     continue
@@ -985,6 +1002,7 @@ class Observador(threading.Thread):
                     ultimo = chave
                     self.enviar(status, **self.montar(sessao, cid))
 
+                self.campeao_da_partida = cid
                 if cid != candidato:
                     candidato, desde = cid, time.time()
                 if (candidato and candidato != aberto and ativo and self.cfg["auto_abrir"]
@@ -1409,6 +1427,15 @@ class App:
             self.banco.master.pack(fill="x", after=self.cartas.master if e["meu"] else self.meu.master)
         if not e.get("combos"):
             self.combos.master.pack_forget()
+        if e.get("em_partida"):   # durante a partida: so o campeao e a build
+            for quadro in (self.cartas, self.banco, self.aliados):
+                quadro.master.pack_forget()
+        else:                     # aliados volta para o lugar dele (depois do ultimo quadro visivel)
+            anterior = self.meu.master
+            for quadro in (self.build, self.cartas, self.combos, self.banco):
+                if quadro.master.winfo_manager():
+                    anterior = quadro.master
+            self.aliados.master.pack(fill="x", after=anterior)
         if e["bans"] or e["picks"]:
             self.area_arena.pack(fill="x", after=self.aliados.master)
         else:
