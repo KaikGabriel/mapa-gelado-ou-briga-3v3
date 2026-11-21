@@ -34,6 +34,10 @@ O uso e a instalação estão no [README.md](README.md).
   campeão e a build (`em_partida=True` esconde cartinhas, combos, banco e aliados). Em qualquer outra fase
   (`WaitingForStats`, `EndOfGame`, `Lobby`...) esquece o campeão e volta a esperar a seleção.
   Cartinhas e combos ficam fora da partida pela regra da Riot sobre recomendar escolhas dentro do jogo.
+- **Painel aberto no meio da partida** (2026-11-21): `campeao_na_partida` lê o seu `puuid` em
+  `/lol-summoner/v1/current-summoner` e procura ele em `gameData.playerChampionSelections` (e `teamOne`/`teamTwo`)
+  de `/lol-gameflow/v1/session`. O modo (Mayhem ou Arena) vem de `gameData.queue.gameMode`.
+  Testado no cliente real numa Arena: achou o Cho'Gath certo.
 - **Bigorna = favoritos da torcida da Arena** (2026-11-21): o ícone de bigorna nos campeões da seleção é o
   "Crowd Favorites" ("You get a bonus Stats Anvil to start the game"). Achamos lendo o `assets.wad` do plugin
   `rcp-fe-lol-champ-select` do cliente: a lista vem de
@@ -64,7 +68,6 @@ O uso e a instalação estão no [README.md](README.md).
   Quem tem a 1.2 precisa clicar em **Instalar script** de novo.
 - `Bandeja`: guarde a referência do `WNDPROC` (`self._proc`), senão o Python apaga o callback e o programa fecha.
   Se o Explorer reiniciar, o ícone volta pela mensagem `TaskbarCreated`.
-- Se o painel for aberto com a partida já rolando, ele não sabe o campeão (não passou pela seleção) e não mostra build.
 - O campo `relatedPrimeItemId` de `/lol-champ-select/v1/all-grid-champions` NÃO é a bigorna (é só o id do campeão).
 - O segundo monitor do usuário é vertical e fica à esquerda (coordenadas negativas).
 

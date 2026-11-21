@@ -23,7 +23,7 @@
 | | |
 |---|---|
 | **Abre a build sozinho** | Quando você pega ou troca de campeão, a página certa do METAsrc abre no navegador: Mayhem ou Arena, conforme a fila. Se você trocar de campeão, **a mesma aba** troca para a build nova, em vez de abrir outra aba. |
-| **Build no painel** | Mostra no próprio painel a build do seu campeão: feitiços, itens iniciais, os 7 itens na ordem de compra (com ícone e nome em português), a ordem para maximizar as habilidades e, na Arena, os itens prismáticos. A build **continua no painel durante a partida** e some quando o jogo acaba. |
+| **Build no painel** | Mostra no próprio painel a build do seu campeão: feitiços, itens iniciais, os 7 itens na ordem de compra (com ícone e nome em português), a ordem para maximizar as habilidades e, na Arena, os itens prismáticos. A build **continua no painel durante a partida** e some quando o jogo acaba. Se o painel for aberto com a partida já rolando, ele pergunta ao cliente qual é o seu campeão e mostra a build mesmo assim. |
 | **Cartinhas recomendadas** | Mostra as melhores cartinhas (Prismática, Ouro e Prata) do seu campeão, com o tier do METAsrc. Só aparece na seleção de campeões. |
 | **Combos do King Nidhogg, o "Japonês do Arena"** | Se o seu campeão aparece num combo do canal [King Nidhogg](https://www.youtube.com/@KingNidhogg), o "Japonês do Arena", o painel mostra as cartinhas do combo (com o tier delas para o seu campeão), uma dica e um botão para o vídeo. Na Arena, campeões com combo forte ganham a marca **▶ tem combo** nas listas. |
 | **Banco do ARAM** | Mostra os campeões do banco ordenados pelo tier. O que for mais forte que o seu ganha uma ★. Um clique abre a build. |

@@ -876,6 +876,28 @@ class Observador(threading.Thread):
         candidatos.sort(key=chave, reverse=True)
         return candidatos[:QTD_SUGESTOES]
 
+    def campeao_na_partida(self, auth) -> int:
+        """Seu campeao na partida que esta rolando, lido do cliente (para quando o painel abre no meio do jogo).
+
+        A sessao da partida lista o campeao de cada jogador pelo puuid; o seu puuid vem de current-summoner.
+        Tambem acerta o modo (Mayhem ou Arena) pela fila da partida.
+        """
+        try:
+            eu = lcu(auth, "/lol-summoner/v1/current-summoner").get("puuid")
+            dados = lcu(auth, "/lol-gameflow/v1/session").get("gameData", {})
+        except Exception:
+            return 0
+        if not eu:
+            return 0
+        jogadores = list(dados.get("playerChampionSelections") or [])
+        jogadores += list(dados.get("teamOne") or []) + list(dados.get("teamTwo") or [])
+        cid = next((int(j.get("championId") or 0) for j in jogadores
+                    if j.get("puuid") == eu and j.get("championId")), 0)
+        if cid:
+            fila = dados.get("queue", {}) or {}
+            self.modo = "CHERRY" if fila.get("gameMode") == "CHERRY" else "KIWI"
+        return cid
+
     def enviar(self, status, lol=True, **estado):
         self.saida.put({"status": status, "fonte": DADOS.resumo(), "lol": lol, **{**VAZIO, **estado}})
 
@@ -987,6 +1009,9 @@ class Observador(threading.Thread):
                         fase = lcu(auth, "/lol-gameflow/v1/gameflow-phase")
                     except Exception:
                         fase = ""
+                    if fase in EM_PARTIDA and not self.campeao_da_partida:
+                        # o painel abriu com a partida rolando: pergunta ao cliente
+                        self.campeao_da_partida = self.campeao_na_partida(auth)
                     cid = self.campeao_da_partida
                     if fase in EM_PARTIDA and cid:
                         # partida rolando: so a build (cartinhas e combos ficam so na selecao)
