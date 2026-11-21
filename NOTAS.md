@@ -45,6 +45,17 @@ O uso e a instalação estão no [README.md](README.md).
   O painel lê essa lista na seleção, ordena pelo tier e marca ★ em tier A ou melhor (`TIERS_FORTES`).
   Cada campeão da bigorna é cruzado com `combos_arena.json` (`combos_de`): o combo mais forte vira um botão
   com o vídeo embaixo dele, e o topo da seção mostra "X de Y aparecem nos vídeos do King Nidhogg".
+- **Mayhem sem navegador, pelo OP.GG** (2026-11-21): o usuário quer largar o navegador. METAsrc e U.GG bloqueiam
+  programas (403), mas o OP.GG tem uma API pública feita para programas: `https://mcp-api.op.gg/mcp` (JSON-RPC,
+  `tools/call`). Usamos `lol_get_champion_analysis` (game_mode `aram`; `position` é obrigatório mas não muda nada
+  no ARAM, mandamos `mid`) e `lol_list_aram_augments` (por `champion_id`, `lang` pt_BR).
+  O nome do campeão vai em UPPER_SNAKE_CASE (`chave_opgg`: "Cho'Gath" -> CHO_GATH).
+  A resposta NÃO é JSON: vem num formato "class X: a,b" + `X(1,"t",[...])`, lido por `ler_opgg`.
+  Tier do OP.GG 1..5 (1 = mais forte) vira S/A/B/C/D (`OPGG_TIER`). Cartinhas: ordenadas por `performance`.
+  Classe `OpGG`: thread com fila, cache em `opgg_mayhem.json` por 12 h, espera 2 min antes de repetir uma falha.
+  O OP.GG não cobre a Arena (só ranked, flex, urf, aram, nexus_blitz), então a Arena continua no METAsrc.
+  No Mayhem o painel não abre mais o navegador sozinho. Na Arena aberta no meio da partida sem build guardada,
+  ele abre a página para o script mandar a build.
 - **Só biblioteca padrão do Python** (tkinter, urllib, ctypes). Nada de `pip install` para rodar pelo código.
 - **O `.exe` fica commitado na raiz do repositório.** Não há `gh` no PC do usuário para criar Releases.
 - **Nomes de campeão vêm do Data Dragon em inglês** (o cliente em pt_BR devolve nomes traduzidos, que não batem
@@ -69,6 +80,8 @@ O uso e a instalação estão no [README.md](README.md).
 - `Bandeja`: guarde a referência do `WNDPROC` (`self._proc`), senão o Python apaga o callback e o programa fecha.
   Se o Explorer reiniciar, o ícone volta pela mensagem `TaskbarCreated`.
 - O campo `relatedPrimeItemId` de `/lol-champ-select/v1/all-grid-champions` NÃO é a bigorna (é só o id do campeão).
+- Regras da Riot: não mostrar winrate de cartinhas nem de itens da Arena. Por isso o painel mostra só a ordem das
+  cartinhas do OP.GG, sem os números de desempenho. Winrate de campeão pode.
 - O segundo monitor do usuário é vertical e fica à esquerda (coordenadas negativas).
 
 ## Estado atual

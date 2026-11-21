@@ -5,9 +5,10 @@
 <h1 align="center">MayhemBuild</h1>
 
 <p align="center">
-  Painel para <b>League of Legends</b> que abre a build do seu campeão no
-  <a href="https://www.metasrc.com/lol/mayhem">METAsrc</a> assim que você o pega na seleção,
+  Painel para <b>League of Legends</b> que mostra a build do seu campeão assim que você o pega na seleção,
   com foco em <b>ARAM: Mayhem</b> (o ARAM das cartinhas) e <b>Arena</b>.
+  No Mayhem tudo vem direto do <a href="https://www.op.gg">OP.GG</a>, sem navegador; na Arena, do
+  <a href="https://www.metasrc.com/lol/arena">METAsrc</a>, pelo navegador.
 </p>
 
 <p align="center">
@@ -22,11 +23,12 @@
 
 | | |
 |---|---|
-| **Abre a build sozinho** | Quando você pega ou troca de campeão, a página certa do METAsrc abre no navegador: Mayhem ou Arena, conforme a fila. Se você trocar de campeão, **a mesma aba** troca para a build nova, em vez de abrir outra aba. |
+| **Mayhem sem navegador** | No ARAM/Mayhem, a build, as cartinhas e o tier de cada campeão vêm da API pública do OP.GG, direto no painel. Nenhuma página abre. |
+| **Arena: abre a build sozinho** | Na Arena, quando você pega ou troca de campeão, a build do METAsrc abre no navegador (é de lá que vêm os dados da Arena). Se você trocar de campeão, **a mesma aba** troca para a build nova, em vez de abrir outra aba. |
 | **Build no painel** | Mostra no próprio painel a build do seu campeão: feitiços, itens iniciais, os 7 itens na ordem de compra (com ícone e nome em português), a ordem para maximizar as habilidades e, na Arena, os itens prismáticos. A build **continua no painel durante a partida** e some quando o jogo acaba. Se o painel for aberto com a partida já rolando, ele pergunta ao cliente qual é o seu campeão e mostra a build mesmo assim. |
-| **Cartinhas recomendadas** | Mostra as melhores cartinhas (Prismática, Ouro e Prata) do seu campeão, com o tier do METAsrc. Só aparece na seleção de campeões. |
+| **Cartinhas recomendadas** | No Mayhem, as 8 cartinhas com melhor desempenho no seu campeão segundo o OP.GG (em português). Na Arena, as melhores de cada raridade (Prismática, Ouro e Prata) com o tier do METAsrc. Só aparece na seleção de campeões. |
 | **Combos do King Nidhogg, o "Japonês do Arena"** | Se o seu campeão aparece num combo do canal [King Nidhogg](https://www.youtube.com/@KingNidhogg), o "Japonês do Arena", o painel mostra as cartinhas do combo (com o tier delas para o seu campeão), uma dica e um botão para o vídeo. Na Arena, campeões com combo forte ganham a marca **▶ tem combo** nas listas. |
-| **Banco do ARAM** | Mostra os campeões do banco ordenados pelo tier. O que for mais forte que o seu ganha uma ★. Um clique abre a build. |
+| **Banco do ARAM** | Mostra os campeões do banco ordenados pelo tier do OP.GG, com o winrate. O que for mais forte que o seu ganha uma ★. |
 | **Aliados** | Mostra os campeões do seu time (no ARAM dá para trocar com eles), com botão para abrir a build. |
 | **Bigorna (Arena)** | Os campeões com o ícone de bigorna na seleção são os *favoritos da torcida*: quem pega um começa com uma bigorna de status a mais. O painel lista esses campeões do mais forte para o mais fraco, com o tier de cada um, e marca com ★ os de tier A ou melhor. Os que já foram banidos ou pegos por outros jogadores saem da lista. Em qualquer lista, eles aparecem com a marca **⚒ bigorna**. A seção também cruza a lista com os vídeos do King Nidhogg: diz quantos aparecem nos vídeos e põe, embaixo do campeão, um botão com o melhor combo dele que abre o vídeo. |
 | **Sugestão de ban (Arena)** | Lista os campeões fortes e muito escolhidos que ainda não foram banidos nem escolhidos. Avisa quando é a sua vez de banir. |
@@ -39,21 +41,24 @@
 
 ```
  Cliente do LoL ──(API local do cliente)──►  MayhemBuild  ◄──(127.0.0.1:47914)── Script no navegador
- seleção, fila,                              painel                                (Tampermonkey)
- bans                                          │                                   lê o METAsrc que
-                                               ▼                                   VOCÊ abriu
-                                   abre a build no navegador
+ seleção, fila,                              painel                                (Tampermonkey, só Arena)
+ bans, partida                                 ▲    │                               lê o METAsrc que
+                                               │    ▼                               VOCÊ abriu
+                         API pública do OP.GG ─┘   na Arena: abre a build no navegador
+                         (Mayhem: build, cartinhas, tier)
 ```
 
 - **Cliente do LoL:** o painel lê a seleção de campeões, a fila, o banco e os bans pela API local que o próprio cliente deixa aberta no seu PC (a chamada LCU). Não usa login nem chave de API.
-- **METAsrc:** o site bloqueia programas que tentam ler as páginas sozinhos. Por isso quem lê os dados é um script do Tampermonkey, **no seu navegador**, nas páginas que você mesmo abre. As builds que o painel abre já servem para isso. O script manda os dados para o painel pelo `127.0.0.1`, sem passar pela internet. A aba de build também fica esperando o painel avisar quando você troca de campeão.
+- **OP.GG (Mayhem):** o painel usa a [API pública do OP.GG](https://mcp-api.op.gg/mcp), feita para programas. Ele manda só o nome e o número do campeão e guarda as respostas por 12 horas. Ela não tem dados da Arena.
+- **METAsrc (Arena):** o site bloqueia programas que tentam ler as páginas sozinhos. Por isso quem lê os dados é um script do Tampermonkey, **no seu navegador**, nas páginas que você mesmo abre. As builds que o painel abre já servem para isso. O script manda os dados para o painel pelo `127.0.0.1`, sem passar pela internet. A aba de build também fica esperando o painel avisar quando você troca de campeão.
 - **Nomes e ícones:** vêm do [Data Dragon](https://developer.riotgames.com/docs/lol#data-dragon), da própria Riot.
 
 ## Requisitos
 
 - **Windows 10 ou 11.**
 - **League of Legends** instalado (o painel lê o cliente que está aberto no PC).
-- **Um navegador com a extensão [Tampermonkey](https://www.tampermonkey.net/)**: Chrome, Edge, Firefox, Brave, Opera ou Vivaldi.
+- **Internet**, para o OP.GG e os ícones.
+- **Só para a Arena: um navegador com a extensão [Tampermonkey](https://www.tampermonkey.net/)**: Chrome, Edge, Firefox, Brave, Opera ou Vivaldi. Para o Mayhem não precisa.
 - **Python 3.10 ou mais novo**, só se for rodar pelo código em vez do `.exe`.
 - Dois monitores é opcional: com um só, o navegador abre normal.
 
@@ -74,25 +79,27 @@ pyw mayhem_build.pyw
 ```
 Só usa a biblioteca padrão do Python, então não precisa instalar nada com `pip`.
 
-### 2. O script do navegador (para tiers, winrates, cartinhas e build)
+### 2. O script do navegador (só para a Arena)
+
+Se você só joga Mayhem, pode pular esta parte.
 
 1. Instale a extensão [Tampermonkey](https://www.tampermonkey.net/).
 2. **No Chrome e em outros navegadores baseados nele:** abra `chrome://extensions` → **Detalhes** do Tampermonkey e ligue **Permitir scripts de usuário**. Se essa opção não aparecer, ligue o *Modo do desenvolvedor* antes.
 3. No painel, clique em **Instalar script** e depois em **Instalar** na página do Tampermonkey.
    Também dá para abrir o [`metasrc_para_painel.user.js`](metasrc_para_painel.user.js) direto no Tampermonkey.
 4. Se você já tinha o script instalado, clique em **Instalar script** de novo depois de atualizar o painel: a troca de campeão na mesma aba precisa do script 1.3 ou mais novo.
-5. No painel, clique em **Atualizar Mayhem** e **Atualizar Arena**. Quando o Tampermonkey perguntar sobre `127.0.0.1`, escolha **Sempre permitir**.
+5. No painel, clique em **Atualizar Arena**. Quando o Tampermonkey perguntar sobre `127.0.0.1`, escolha **Sempre permitir**.
 
 Pronto. Embaixo dos botões, o painel mostra de qual patch são os dados e de quando, por exemplo *"Arena: patch 26.22 (hoje)"*.
 
 ## Usando
 
-- **Clique em qualquer campeão** do painel para abrir a build dele.
+- **Clique em qualquer campeão** do painel para abrir a página da build dele no METAsrc.
 - **X da janela:** com o LoL aberto, só esconde o painel. Ele volta na próxima vez que o LoL abrir.
 - **Sair:** fecha de vez. Ele volta a ligar com o Windows.
 - **Ícone perto do relógio** (nos ícones ocultos, na setinha ^): um clique mostra ou esconde o painel. Com o botão direito tem **Mostrar painel** e **Sair**. Para deixar o ícone sempre visível, arraste-o para a barra de tarefas.
 - **Opções:**
-  - *Abrir a build automaticamente*
+  - *Abrir a build da Arena no navegador sozinho* (no Mayhem nunca abre)
   - *Só no ARAM / Mayhem / Arena*: em ranqueada e normal não abre nada sozinho.
   - *Sempre por cima das janelas*
   - *Aparecer só quando o LoL estiver aberto*
@@ -106,7 +113,8 @@ Tudo fica em `%APPDATA%\MayhemBuild\`:
 | Arquivo | Conteúdo |
 |---|---|
 | `config.json` | Suas opções |
-| `metasrc_mayhem.json` / `metasrc_arena.json` | Tiers e estatísticas do METAsrc |
+| `opgg_mayhem.json` | Build, cartinhas e tier do Mayhem que vieram do OP.GG (cada campeão vale por 12 horas) |
+| `metasrc_mayhem.json` / `metasrc_arena.json` | Tiers e estatísticas do METAsrc (o do Mayhem só é usado se o OP.GG falhar) |
 | `cartas_mayhem.json` / `cartas_arena.json` | Cartinhas e build de cada campeão |
 
 O início com o Windows é a entrada `MayhemBuild` em `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Para desligar, desmarque a opção no painel.
@@ -125,10 +133,13 @@ Para atualizar o `.exe` que fica no repositório, copie o `dist\MayhemBuild.exe`
 - Ele **não joga por você**: não escolhe campeão, não bane, não compra itens e não escolhe cartinhas. Só mostra informações e abre páginas.
 - As cartinhas recomendadas e os combos **só aparecem na seleção de campeões**. Durante a partida o painel mostra só o seu campeão e a build (feitiços, itens e habilidades), porque a Riot não permite programas que indicam qual cartinha escolher dentro do jogo.
 - Para os dados do METAsrc, o script só lê as páginas que você mesmo abre no navegador. O painel não acessa o site sozinho.
+- Para o OP.GG, o painel manda só o nome e o número do campeão. Nada da sua conta sai do PC.
 
 ## Limitações
 
-- No **Mayhem**, o METAsrc só publica o tier, sem winrate. Na **Arena** tem tier, nota, colocação média e taxas de pick e ban.
+- O OP.GG não tem dados da **Arena**, por isso a Arena ainda depende do navegador com o script.
+- O OP.GG não diz a raridade das cartinhas do Mayhem (Prismática, Ouro, Prata): o painel mostra as 8 com melhor desempenho no campeão.
+- Sem internet ou com o OP.GG fora do ar, o Mayhem usa o que já estava guardado.
 - Se o METAsrc mudar o site, o script pode parar de ler os dados até ser ajustado.
 - Funciona só no Windows.
 - A janela da build só vai para o outro monitor se o navegador padrão do Windows for um dos navegadores da lista de requisitos. Com outro navegador, a build abre numa aba.
@@ -150,4 +161,4 @@ Para atualizar o `.exe` que fica no repositório, copie o `dist\MayhemBuild.exe`
 
 ---
 
-<sub>O MayhemBuild não é endossado pela Riot Games e não representa as opiniões da Riot Games nem de ninguém oficialmente envolvido na produção ou gestão de League of Legends. League of Legends e Riot Games são marcas registradas da Riot Games, Inc. Os dados de builds, tiers e cartinhas são do <a href="https://www.metasrc.com">METAsrc</a>.</sub>
+<sub>O MayhemBuild não é endossado pela Riot Games e não representa as opiniões da Riot Games nem de ninguém oficialmente envolvido na produção ou gestão de League of Legends. League of Legends e Riot Games são marcas registradas da Riot Games, Inc. Os dados de builds, tiers e cartinhas são do <a href="https://www.op.gg">OP.GG</a> (Mayhem) e do <a href="https://www.metasrc.com">METAsrc</a> (Arena).</sub>

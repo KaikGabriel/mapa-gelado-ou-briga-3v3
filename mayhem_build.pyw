@@ -1,4 +1,4 @@
-"""MayhemBuild - abre a build do seu campeao no METAsrc (ARAM Mayhem e Arena).
+"""MayhemBuild - build do seu campeao no ARAM Mayhem (OP.GG, sem navegador) e na Arena (METAsrc).
 
 Painel pequeno que acompanha a selecao de campeoes do League of Legends:
   * abre a build automaticamente quando voce pega/troca de campeao;
@@ -296,7 +296,8 @@ class DadosSite:
 
     def resumo(self) -> str:
         partes = []
-        for site, rotulo in (("mayhem", "Mayhem"), ("arena", "Arena")):
+        partes.append(OPGG.resumo())
+        for site, rotulo in (("arena", "Arena"),):
             r = self.por_site.get(site)
             if not r:
                 partes.append(f"{rotulo}: sem dados")
@@ -304,7 +305,7 @@ class DadosSite:
             dias = int((time.time() - r.get("quando", 0)) // 86400)
             quando = "hoje" if dias == 0 else ("ontem" if dias == 1 else f"ha {dias} dias")
             partes.append(f"{rotulo}: patch {r.get('patch') or '?'} ({quando})")
-        return "Dados do site - " + "  |  ".join(partes)
+        return "Dados - " + "  |  ".join(partes)
 
 
 def forca(st: dict | None) -> float:
@@ -320,10 +321,222 @@ def texto_site(st: dict | None, modo: str) -> str:
         return ""
     if modo == "CHERRY" and st.get("lugar"):
         return f"Tier {st['tier']}  {st['lugar']:.2f}º"
+    if modo != "CHERRY" and st.get("win"):
+        return f"Tier {st['tier']}  {st['win']:.0f}%"
     return f"Tier {st['tier']}"
 
 
 DADOS = DadosSite()
+
+
+# ------------------------------------------------------------- OP.GG -------
+# API publica do OP.GG (feita para programas usarem). Cobre o ARAM/Mayhem: build,
+# cartinhas e tier de cada campeao. Nao cobre a Arena (essa continua vindo do METAsrc).
+OPGG_URL = "https://mcp-api.op.gg/mcp"
+OPGG_VALIDADE = 12 * 3600          # refaz a busca de um campeao depois de 12 h
+OPGG_TIER = {1: "S", 2: "A", 3: "B", 4: "C", 5: "D"}   # tier do OP.GG (1 = mais forte) -> letra
+QTD_CARTAS_OPGG = 8
+
+
+def ler_opgg(texto: str):
+    """Le o formato de resposta do OP.GG.
+
+    Ele vem assim:  class Augment: id,name,tier   (cabecalhos)  e depois
+    LolListAramAugments(Data([Augment(1211,"Hora do Massacre",3), ...]))
+    Cada Classe(...) vira um dict com os campos do cabecalho; [...] vira lista.
+    """
+    classes, corpo = {}, []
+    for linha in texto.split("\n"):
+        m = re.match(r"class (\w+): (.*)$", linha)
+        if m:
+            classes[m.group(1)] = [c.strip() for c in m.group(2).split(",")]
+        elif linha.strip():
+            corpo.append(linha)
+    s = "\n".join(corpo)
+    numero = re.compile(r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
+    nome_re = re.compile(r"[A-Za-z_]\w*")
+    decodificador = json.JSONDecoder()
+    pos = 0
+
+    def pular():
+        nonlocal pos
+        while pos < len(s) and s[pos] in " \t\r\n,":
+            pos += 1
+
+    def valor():
+        nonlocal pos
+        pular()
+        c = s[pos]
+        if c == '"':
+            v, pos = decodificador.raw_decode(s, pos)
+            return v
+        if c in "[(":
+            fim = "]" if c == "[" else ")"
+            pos += 1
+            itens = []
+            pular()
+            while s[pos] != fim:
+                itens.append(valor())
+                pular()
+            pos += 1
+            return itens
+        m = numero.match(s, pos)
+        if m:
+            pos = m.end()
+            t = m.group(0)
+            return float(t) if any(x in t for x in ".eE") else int(t)
+        m = nome_re.match(s, pos)
+        if not m:
+            raise ValueError(f"resposta do OP.GG estranha perto de {s[pos:pos + 30]!r}")
+        pos = m.end()
+        palavra = m.group(0)
+        if palavra in ("null", "None"):
+            return None
+        if palavra in ("true", "false"):
+            return palavra == "true"
+        if pos < len(s) and s[pos] == "(":
+            args = valor()
+            campos = classes.get(palavra)
+            return dict(zip(campos, args)) if campos and len(campos) == len(args) else args
+        return palavra
+
+    return valor()
+
+
+def chave_opgg(nome: str) -> str:
+    """Nome do campeao no formato do OP.GG: "Cho'Gath" -> CHO_GATH, "Dr. Mundo" -> DR_MUNDO."""
+    return re.sub(r"[^A-Z0-9]+", "_", nome.upper()).strip("_")
+
+
+class OpGG(threading.Thread):
+    """Busca no OP.GG, em segundo plano, a build/cartinhas/tier do Mayhem de cada campeao pedido."""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.trava = threading.Lock()
+        self.versao = 0                      # muda quando chega dado novo (para redesenhar)
+        self.dados: dict[str, dict] = {}     # slug -> {"quando", "tier", "win", "build", "cartas"}
+        self.falhou: dict[str, float] = {}   # slug -> quando falhou (espera antes de tentar de novo)
+        self.fila: queue.Queue = queue.Queue()
+        self.na_fila: set[str] = set()
+        try:
+            self.dados = json.loads(self._arquivo().read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    @staticmethod
+    def _arquivo() -> Path:
+        return CONFIG_DIR / "opgg_mayhem.json"
+
+    def _chamar(self, ferramenta: str, args: dict):
+        corpo = {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                 "params": {"name": ferramenta, "arguments": {**args, "client_app": f"{APP}/2"}}}
+        req = urllib.request.Request(OPGG_URL, data=json.dumps(corpo).encode("utf-8"), method="POST",
+                                     headers={"Content-Type": "application/json", "User-Agent": APP,
+                                              "Accept": "application/json, text/event-stream"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            resposta = json.loads(r.read().decode("utf-8"))
+        if "error" in resposta or resposta.get("result", {}).get("isError"):
+            raise ValueError(str(resposta.get("error") or resposta.get("result"))[:200])
+        return ler_opgg(resposta["result"]["content"][0]["text"])
+
+    def buscar(self, nome: str, cid: int) -> dict:
+        """Busca agora (sem cache) e devolve o registro do campeao."""
+        analise = self._chamar("lol_get_champion_analysis", {
+            "game_mode": "aram", "champion": chave_opgg(nome), "position": "mid",
+            "desired_output_fields": [
+                "champion",
+                "data.summary.average_stats.{play,tier,win_rate}",
+                "data.summoner_spells.{ids[]}", "data.starter_items.{ids[]}", "data.core_items.{ids[]}",
+                "data.boots.{ids[]}", "data.fourth_items[].{ids[]}", "data.fifth_items[].{ids[]}",
+                "data.sixth_items[].{ids[]}", "data.skill_masteries.{ids[]}"]})
+        d = (analise or {}).get("data") or {}
+        stats = ((d.get("summary") or {}).get("average_stats") or {})
+
+        def ids(bloco):
+            """Ids de um bloco; numa lista de opcoes (4o, 5o, 6o item) junta todas, da mais usada para a menos."""
+            blocos = bloco if isinstance(bloco, list) else [bloco or {}]
+            return [str(i) for b in blocos if isinstance(b, dict)
+                    for i in b.get("ids") or [] if re.fullmatch(r"\d{1,7}", str(i))]
+
+        nucleo, botas = ids(d.get("core_items")), ids(d.get("boots"))
+        itens = []
+        for i in nucleo[:1] + botas + nucleo[1:] + ids(d.get("fourth_items")) + ids(d.get("fifth_items")) \
+                + ids(d.get("sixth_items")):
+            if i not in itens:
+                itens.append(i)
+        hab = [h for h in (d.get("skill_masteries") or {}).get("ids") or [] if h in ("Q", "W", "E")]
+        build = {"feiticos": ids(d.get("summoner_spells"))[:2], "inicio": ids(d.get("starter_items"))[:3],
+                 "itens": itens[:7], "prismaticos": [], "habilidades": " > ".join(hab[:3])}
+
+        cartas = []
+        try:
+            lista = self._chamar("lol_list_aram_augments", {
+                "champion_id": int(cid), "lang": "pt_BR",
+                "desired_output_fields": ["data.augments[].{id,name,performance}"]})
+            augs = ((lista or {}).get("data") or {}).get("augments") or []
+            augs = [a for a in augs if isinstance(a, dict) and re.search(r"[^\W\d_]", str(a.get("name") or ""))]
+            augs.sort(key=lambda a: a.get("performance") or 0, reverse=True)   # melhores primeiro
+            cartas = [str(a["name"])[:60] for a in augs[:QTD_CARTAS_OPGG]]
+        except Exception:
+            pass
+
+        tier = OPGG_TIER.get(stats.get("tier"))
+        win = stats.get("win_rate")
+        return {"quando": time.time(), "tier": tier,
+                "win": round(win * 100, 1) if isinstance(win, (int, float)) else None,
+                "build": build if any(build.values()) else None, "cartas": cartas}
+
+    def pedir(self, nome: str, cid: int) -> None:
+        """Coloca o campeao na fila, se nao tiver dado recente (nao trava quem chamou)."""
+        s = slug(nome)
+        with self.trava:
+            reg = self.dados.get(s)
+            if reg and time.time() - reg.get("quando", 0) < OPGG_VALIDADE:
+                return
+            if s in self.na_fila or time.time() - self.falhou.get(s, 0) < 120:
+                return
+            self.na_fila.add(s)
+        if not self.is_alive():
+            try:
+                self.start()
+            except RuntimeError:
+                pass
+        self.fila.put((nome, cid))
+
+    def run(self):
+        while True:
+            nome, cid = self.fila.get()
+            s = slug(nome)
+            try:
+                reg = self.buscar(nome, cid)
+                with self.trava:
+                    self.dados[s] = reg
+                    self.versao += 1
+                    copia = json.dumps(self.dados)
+                try:
+                    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+                    self._arquivo().write_text(copia, encoding="utf-8")
+                except Exception:
+                    pass
+            except Exception:
+                with self.trava:
+                    self.falhou[s] = time.time()
+            finally:
+                with self.trava:
+                    self.na_fila.discard(s)
+
+    def de(self, nome: str) -> dict | None:
+        with self.trava:
+            return self.dados.get(slug(nome))
+
+    def resumo(self) -> str:
+        with self.trava:
+            n = len(self.dados)
+        return f"Mayhem: OP.GG direto ({n} campeoes)"
+
+
+OPGG = OpGG()
 
 
 class Navegacao:
@@ -810,7 +1023,11 @@ class Observador(threading.Thread):
         return self.imgs_build[caminho]
 
     def montar_build(self, cid: int) -> dict | None:
-        b = DADOS.build_de(self.nome(cid), self.modo)
+        b = None
+        if self.modo != "CHERRY":
+            OPGG.pedir(self.nome(cid), cid)
+            b = (OPGG.de(self.nome(cid)) or {}).get("build")
+        b = b or DADOS.build_de(self.nome(cid), self.modo)
         if not b:
             return None
         url = url_build(self.nome(cid), self.modo)
@@ -835,10 +1052,27 @@ class Observador(threading.Thread):
             linhas.append(("Prismaticos", [item(i) for i in b["prismaticos"]]))
         return {"linhas": linhas, "habilidades": b.get("habilidades", "")}
 
+    def cartas_de(self, cid: int) -> list[tuple[str, str]]:
+        """Mayhem: as melhores cartinhas do OP.GG; Arena: as do METAsrc."""
+        if self.modo != "CHERRY":
+            OPGG.pedir(self.nome(cid), cid)
+            cartas = (OPGG.de(self.nome(cid)) or {}).get("cartas") or []
+            if cartas:
+                return [(rotulo, "  ·  ".join(cartas[i:i + 4]))
+                        for rotulo, i in (("Melhores", 0), ("Boas", 4)) if cartas[i:i + 4]]
+        return DADOS.cartas_de(self.nome(cid), self.modo)
+
     def nome(self, cid: int) -> str:
         return self.campeoes.get(cid, ("", f"#{cid}"))[1]
 
     def site(self, cid: int) -> dict | None:
+        if self.modo != "CHERRY":   # Mayhem/ARAM: OP.GG direto, sem navegador
+            nome = self.nome(cid)
+            if cid > 0 and not nome.startswith("#"):
+                OPGG.pedir(nome, cid)
+            reg = OPGG.de(nome)
+            if reg and reg.get("tier") in TIERS:
+                return {"tier": reg["tier"], "win": reg.get("win")}
         return DADOS.de(self.nome(cid), self.modo)
 
     def info(self, cid: int, destaque: bool = False) -> dict:
@@ -918,7 +1152,7 @@ class Observador(threading.Thread):
             melhor = banco[0]
 
         estado = {"meu": self.info(cid) if cid else None,
-                  "cartas": DADOS.cartas_de(self.nome(cid), self.modo) if cid else [],
+                  "cartas": self.cartas_de(cid) if cid else [],
                   "build": self.montar_build(cid) if cid else None,
                   "combos": self.montar_combos(cid) if cid and self.modo == "CHERRY" else [],
                   "banco": [self.info(b, b == melhor) for b in banco],
@@ -1012,11 +1246,15 @@ class Observador(threading.Thread):
                     if fase in EM_PARTIDA and not self.campeao_da_partida:
                         # o painel abriu com a partida rolando: pergunta ao cliente
                         self.campeao_da_partida = self.campeao_na_partida(auth)
+                        c = self.campeao_da_partida
+                        if (c and self.modo == "CHERRY" and self.cfg["auto_abrir"]
+                                and not DADOS.build_de(self.nome(c), self.modo)):
+                            abrir_build(url_build(self.nome(c), self.modo), self.cfg["segundo_monitor"])
                     cid = self.campeao_da_partida
                     if fase in EM_PARTIDA and cid:
                         # partida rolando: so a build (cartinhas e combos ficam so na selecao)
-                        if ultimo != ("jogo", cid, DADOS.versao):
-                            ultimo = ("jogo", cid, DADOS.versao)
+                        if ultimo != ("jogo", cid, DADOS.versao, OPGG.versao):
+                            ultimo = ("jogo", cid, DADOS.versao, OPGG.versao)
                             self.enviar(f"Em partida: {self.nome(cid)}", meu=self.info(cid),
                                         build=self.montar_build(cid), modo=self.modo, em_partida=True)
                     else:
@@ -1054,7 +1292,7 @@ class Observador(threading.Thread):
                 chave = (json.dumps(sessao.get("myTeam"), sort_keys=True),
                          json.dumps(sessao.get("benchChampions"), sort_keys=True),
                          json.dumps(sessao.get("actions"), sort_keys=True) if self.modo == "CHERRY" else "",
-                         status, DADOS.versao, tuple(self.bigorna))
+                         status, DADOS.versao, OPGG.versao, tuple(self.bigorna))
                 if chave != ultimo:
                     ultimo = chave
                     self.enviar(status, **self.montar(sessao, cid))
@@ -1068,6 +1306,7 @@ class Observador(threading.Thread):
                 if cid != candidato:
                     candidato, desde = cid, time.time()
                 if (candidato and candidato != aberto and ativo and self.cfg["auto_abrir"]
+                        and self.modo == "CHERRY"   # Mayhem: tudo vem do OP.GG, sem navegador
                         and time.time() - desde >= ESPERA_TROCA):
                     abrir_build(url_build(self.nome(candidato), self.modo), self.cfg["segundo_monitor"])
                     aberto = candidato
@@ -1279,8 +1518,8 @@ class App:
         self.aviso.pack(fill="x", padx=12)
 
         self.meu = self._secao("SEU CAMPEAO")
-        self.build = self._secao("BUILD (METAsrc)")
-        self.cartas = self._secao("CARTINHAS RECOMENDADAS (METAsrc, so na selecao)")
+        self.build = self._secao("BUILD (Mayhem: OP.GG  |  Arena: METAsrc)")
+        self.cartas = self._secao("CARTINHAS RECOMENDADAS (so na selecao)")
         self.combos = self._secao('COMBOS DO KING NIDHOGG, o "Japonês do Arena"', cor=BOM)
         self.banco = self._secao("BANCO (ordenado pelo tier, ★ = melhor que o seu)")
         self.aliados = self._secao("ALIADOS")
@@ -1292,7 +1531,8 @@ class App:
         self.bans = self._secao("SUGESTAO DE BAN (fortes e muito escolhidos)", self.area_arena, ALERTA)
         self.picks = self._secao("MELHORES PICKS (tier do site)", self.area_arena, BOM)
 
-        tk.Label(raiz, text="Tier = METAsrc. Na Arena: colocacao media (menor = melhor).",
+        tk.Label(raiz, text="Mayhem: tier e winrate do OP.GG.  Arena: tier do METAsrc e colocacao media "
+                            "(menor = melhor).",
                  bg=FUNDO, fg=APAGADO, font=("Segoe UI", 8), anchor="w", justify="left").pack(fill="x", padx=12)
 
         linha = tk.Frame(raiz, bg=FUNDO)
@@ -1303,7 +1543,6 @@ class App:
         botoes = tk.Frame(raiz, bg=FUNDO)
         botoes.pack(fill="x", padx=12, pady=(2, 4))
         links = [("Instalar script", f"http://127.0.0.1:{DADOS_PORT}/{SCRIPT_NOME}"),
-                 ("Atualizar Mayhem", TIER_URL.format(site="mayhem")),
                  ("Atualizar Arena", TIER_URL.format(site="arena"))]
         for rotulo, url in links:
             tk.Button(botoes, text=rotulo, command=lambda u=url: abrir(u),
@@ -1316,7 +1555,7 @@ class App:
         opcoes = tk.Frame(raiz, bg=FUNDO)
         opcoes.pack(fill="x", padx=8, pady=(0, 10))
         self.vars = {}
-        for chave, texto in (("auto_abrir", "Abrir a build automaticamente"),
+        for chave, texto in (("auto_abrir", "Abrir a build da Arena no navegador sozinho"),
                              ("so_aram", "So no ARAM / Mayhem / Arena"),
                              ("sempre_topo", "Sempre por cima das janelas"),
                              ("so_com_lol", "Aparecer so quando o LoL estiver aberto"),
