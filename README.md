@@ -28,6 +28,7 @@
 | **Combos do King Nidhogg, o "Japonês do Arena"** | Se o seu campeão aparece num combo do canal [King Nidhogg](https://www.youtube.com/@KingNidhogg), o "Japonês do Arena", o painel mostra as cartinhas do combo (com o tier delas para o seu campeão), uma dica e um botão para o vídeo. Na Arena, campeões com combo forte ganham a marca **▶ tem combo** nas listas. |
 | **Banco do ARAM** | Mostra os campeões do banco ordenados pelo tier. O que for mais forte que o seu ganha uma ★. Um clique abre a build. |
 | **Aliados** | Mostra os campeões do seu time (no ARAM dá para trocar com eles), com botão para abrir a build. |
+| **Bigorna (Arena)** | Os campeões com o ícone de bigorna na seleção são os *favoritos da torcida*: quem pega um começa com uma bigorna de status a mais. O painel lista esses campeões do mais forte para o mais fraco, com o tier de cada um, e marca com ★ os de tier A ou melhor. Os que já foram banidos ou pegos por outros jogadores saem da lista. Em qualquer lista, eles aparecem com a marca **⚒ bigorna**. |
 | **Sugestão de ban (Arena)** | Lista os campeões fortes e muito escolhidos que ainda não foram banidos nem escolhidos. Avisa quando é a sua vez de banir. |
 | **Melhores picks (Arena)** | Os campeões com melhor tier no site. Só lista campeões que você tem. |
 | **Build numa janela no outro monitor** | Se você tem dois monitores, a build abre numa **janela própria** do navegador, maximizada no monitor em que o LoL **não** está. As janelas que você já tinha abertas ficam onde estão. Com um monitor só, abre numa aba, como qualquer link. |

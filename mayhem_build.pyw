@@ -43,6 +43,10 @@ ESPERA_TROCA = 1.5       # segundos com o mesmo campeao antes de abrir a pagina
 LOCK_PORT = 47913        # impede abrir dois programas ao mesmo tempo
 DADOS_PORT = 47914       # onde o script do navegador entrega os dados do site
 QTD_SUGESTOES = 5
+# Arena: campeoes "favoritos da torcida" (icone de bigorna na selecao). Quem pega um
+# comeca a partida com uma bigorna de status a mais. Lista que o proprio cliente usa:
+BIGORNA_URL = "/lol-lobby-team-builder/champ-select/v1/crowd-favorite-champion-list"
+TIERS_FORTES = {"S+", "S", "A"}   # bigorna: tier A ou melhor = vale a pena
 # fases do cliente em que a partida esta rolando: o painel continua mostrando a build
 EM_PARTIDA = {"GameStart", "InProgress", "Reconnect"}
 SCRIPT_NOME = "metasrc_para_painel.user.js"          # fica na mesma pasta deste programa
@@ -725,7 +729,8 @@ def baixar(url: str, timeout=10) -> bytes:
 
 
 # ---------------------------------------------------------------- worker ---
-VAZIO = {"meu": None, "build": None, "cartas": [], "combos": [], "banco": [], "aliados": [], "bans": [], "picks": [], "aviso": ""}
+VAZIO = {"meu": None, "build": None, "cartas": [], "combos": [], "banco": [], "aliados": [], "bans": [], "picks": [],
+         "bigorna": [], "aviso": ""}
 
 
 class Observador(threading.Thread):
@@ -743,6 +748,7 @@ class Observador(threading.Thread):
         self.feiticos: dict[str, tuple[str, str]] = {}   # id do feitico -> (chave ddragon, nome)
         self.imgs_build: dict[str, bytes | None] = {}
         self.campeao_da_partida = 0   # o campeao que voce fechou na selecao
+        self.bigorna: list[int] = []  # favoritos da torcida desta selecao
 
     # dados dos campeoes (nomes em ingles + icones)
     def carregar_campeoes(self, auth):
@@ -840,6 +846,8 @@ class Observador(threading.Thread):
         linhas = [nome, texto_site(self.site(cid), self.modo)]
         if destaque:
             linhas[0] = "★ " + nome
+        if cid in self.bigorna:
+            linhas.append("⚒ bigorna")
         if self.modo == "CHERRY" and any(c.get("forca") == "forte" for c, _ in combos_de(nome)):
             linhas.append("▶ tem combo")
         return {"id": cid, "nome": nome, "icone": self.icone(cid),
@@ -916,6 +924,19 @@ class Observador(threading.Thread):
             estado["picks"] = [self.info(c) for c in self.sugestoes(indisp | {cid}, para_ban=False)]
             if minha_vez_ban:
                 estado["aviso"] = "SUA VEZ DE BANIR!"
+        if self.bigorna:
+            ocupados: set[int] = set()   # banidos ou pegos por outros jogadores
+            for grupo in sessao.get("actions", []) or []:
+                for a in grupo:
+                    if a.get("championId") and (a.get("type") == "ban" or a.get("actorCellId") != eu_cell):
+                        ocupados.add(int(a["championId"]))
+            for p in (sessao.get("myTeam", []) or []) + (sessao.get("theirTeam", []) or []):
+                if p.get("cellId") != eu_cell and p.get("championId"):
+                    ocupados.add(int(p["championId"]))
+            livres = [c for c in self.bigorna if c not in ocupados or c == cid]
+            livres.sort(key=lambda c: forca(self.site(c)), reverse=True)
+            estado["bigorna"] = [self.info(c, (self.site(c) or {}).get("tier") in TIERS_FORTES)
+                                 for c in livres]
         estado["modo"] = self.modo
         return estado
 
@@ -951,6 +972,7 @@ class Observador(threading.Thread):
 
                 if not sessao:
                     aberto = candidato = 0
+                    self.bigorna = []
                     try:
                         fase = lcu(auth, "/lol-gameflow/v1/gameflow-phase")
                     except Exception:
@@ -997,11 +1019,16 @@ class Observador(threading.Thread):
                 chave = (json.dumps(sessao.get("myTeam"), sort_keys=True),
                          json.dumps(sessao.get("benchChampions"), sort_keys=True),
                          json.dumps(sessao.get("actions"), sort_keys=True) if self.modo == "CHERRY" else "",
-                         status, DADOS.versao)
+                         status, DADOS.versao, tuple(self.bigorna))
                 if chave != ultimo:
                     ultimo = chave
                     self.enviar(status, **self.montar(sessao, cid))
 
+                if not self.bigorna:
+                    try:
+                        self.bigorna = [int(c) for c in lcu(auth, BIGORNA_URL) or [] if int(c) > 0]
+                    except Exception:
+                        self.bigorna = []
                 self.campeao_da_partida = cid
                 if cid != candidato:
                     candidato, desde = cid, time.time()
@@ -1225,6 +1252,8 @@ class App:
         # so aparecem na Arena com dados do site
         self.area_arena = tk.Frame(raiz, bg=FUNDO)
         self.area_arena.pack(fill="x")
+        self.bigorna = self._secao("⚒ BIGORNA: favoritos da torcida (★ = forte, tier A ou melhor)",
+                                   self.area_arena)
         self.bans = self._secao("SUGESTAO DE BAN (fortes e muito escolhidos)", self.area_arena, ALERTA)
         self.picks = self._secao("MELHORES PICKS (tier do site)", self.area_arena, BOM)
 
@@ -1380,8 +1409,8 @@ class App:
                          padx=6, pady=4)
 
     def render(self, e: dict):
-        for quadro in (self.meu, self.build, self.cartas, self.combos, self.banco, self.aliados, self.bans,
-                       self.picks):
+        for quadro in (self.meu, self.build, self.cartas, self.combos, self.banco, self.aliados, self.bigorna,
+                       self.bans, self.picks):
             for w in quadro.winfo_children():
                 w.destroy()
         if e["meu"]:
@@ -1415,7 +1444,7 @@ class App:
         else:
             self.combos.master.pack_forget()
         for quadro, lista in ((self.banco, e["banco"]), (self.aliados, e["aliados"]),
-                              (self.bans, e["bans"]), (self.picks, e["picks"])):
+                              (self.bigorna, e["bigorna"]), (self.bans, e["bans"]), (self.picks, e["picks"])):
             if lista:
                 for i, c in enumerate(lista):
                     self.botao(quadro, c, 3).grid(row=i // 5, column=i % 5, padx=2, pady=2)
@@ -1436,7 +1465,11 @@ class App:
                 if quadro.master.winfo_manager():
                     anterior = quadro.master
             self.aliados.master.pack(fill="x", after=anterior)
-        if e["bans"] or e["picks"]:
+        if e["bigorna"]:
+            self.bigorna.master.pack(fill="x", before=self.bans.master)
+        else:
+            self.bigorna.master.pack_forget()
+        if e["bans"] or e["picks"] or e["bigorna"]:
             self.area_arena.pack(fill="x", after=self.aliados.master)
         else:
             self.area_arena.pack_forget()
