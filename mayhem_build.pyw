@@ -935,8 +935,18 @@ class Observador(threading.Thread):
                     ocupados.add(int(p["championId"]))
             livres = [c for c in self.bigorna if c not in ocupados or c == cid]
             livres.sort(key=lambda c: forca(self.site(c)), reverse=True)
-            estado["bigorna"] = [self.info(c, (self.site(c) or {}).get("tier") in TIERS_FORTES)
-                                 for c in livres]
+            estado["bigorna"] = []
+            for c in livres:
+                item = self.info(c, (self.site(c) or {}).get("tier") in TIERS_FORTES)
+                achados = combos_de(self.nome(c))   # do combo mais forte para o mais fraco
+                if achados:
+                    combo, video = achados[0]
+                    item["video"] = {"combo": combo["nome"], "forca": combo.get("forca", ""),
+                                     "url": f"https://www.youtube.com/watch?v={video}"}
+                estado["bigorna"].append(item)
+            com_video = sum(1 for b in estado["bigorna"] if b.get("video"))
+            estado["bigorna_resumo"] = (f"{com_video} de {len(estado['bigorna'])} aparecem nos videos "
+                                        f"do King Nidhogg, o \"Japonês do Arena\"")
         estado["modo"] = self.modo
         return estado
 
@@ -1408,6 +1418,23 @@ class App:
                                                 "bold" if texto_lado or c.get("destaque") else "normal"),
                          padx=6, pady=4)
 
+    def render_bigorna(self, lista: list[dict], resumo: str):
+        """Campeoes com bigorna; embaixo de cada um, o video do King Nidhogg (se tiver)."""
+        if resumo:
+            tk.Label(self.bigorna, text=resumo, bg=CARTAO, fg=APAGADO, font=("Segoe UI", 8),
+                     anchor="w").grid(row=0, column=0, columnspan=5, sticky="w", padx=8, pady=(4, 0))
+        for i, c in enumerate(lista):
+            linha, coluna = 1 + (i // 5) * 2, i % 5
+            self.botao(self.bigorna, c, 3).grid(row=linha, column=coluna, padx=2, pady=(2, 0))
+            v = c.get("video")
+            if v:
+                tk.Button(self.bigorna, text=f"▶ {v['combo']}", wraplength=90,
+                          command=lambda u=v["url"]: abrir(u),
+                          bg=FUNDO, fg=BOM if v["forca"] == "forte" else TEXTO, activebackground=CARTAO,
+                          activeforeground=DESTAQUE, relief="flat", bd=0, cursor="hand2",
+                          font=("Segoe UI", 7), padx=4, pady=1).grid(row=linha + 1, column=coluna,
+                                                                       padx=2, pady=(0, 4))
+
     def render(self, e: dict):
         for quadro in (self.meu, self.build, self.cartas, self.combos, self.banco, self.aliados, self.bigorna,
                        self.bans, self.picks):
@@ -1444,7 +1471,7 @@ class App:
         else:
             self.combos.master.pack_forget()
         for quadro, lista in ((self.banco, e["banco"]), (self.aliados, e["aliados"]),
-                              (self.bigorna, e["bigorna"]), (self.bans, e["bans"]), (self.picks, e["picks"])):
+                              (self.bans, e["bans"]), (self.picks, e["picks"])):
             if lista:
                 for i, c in enumerate(lista):
                     self.botao(quadro, c, 3).grid(row=i // 5, column=i % 5, padx=2, pady=2)
@@ -1466,6 +1493,7 @@ class App:
                     anterior = quadro.master
             self.aliados.master.pack(fill="x", after=anterior)
         if e["bigorna"]:
+            self.render_bigorna(e["bigorna"], e.get("bigorna_resumo", ""))
             self.bigorna.master.pack(fill="x", before=self.bans.master)
         else:
             self.bigorna.master.pack_forget()

@@ -39,6 +39,8 @@ O uso e a instalação estão no [README.md](README.md).
   `rcp-fe-lol-champ-select` do cliente: a lista vem de
   `/lol-lobby-team-builder/champ-select/v1/crowd-favorite-champion-list` (lista de ids de campeão).
   O painel lê essa lista na seleção, ordena pelo tier e marca ★ em tier A ou melhor (`TIERS_FORTES`).
+  Cada campeão da bigorna é cruzado com `combos_arena.json` (`combos_de`): o combo mais forte vira um botão
+  com o vídeo embaixo dele, e o topo da seção mostra "X de Y aparecem nos vídeos do King Nidhogg".
 - **Só biblioteca padrão do Python** (tkinter, urllib, ctypes). Nada de `pip install` para rodar pelo código.
 - **O `.exe` fica commitado na raiz do repositório.** Não há `gh` no PC do usuário para criar Releases.
 - **Nomes de campeão vêm do Data Dragon em inglês** (o cliente em pt_BR devolve nomes traduzidos, que não batem
