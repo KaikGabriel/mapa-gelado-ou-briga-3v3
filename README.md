@@ -94,6 +94,7 @@ Pronto. Embaixo dos botões, o painel mostra de qual patch são os dados e de qu
 
 ## Usando
 
+- **Tela pequena:** o painel nunca passa da altura da tela. Se não couber tudo, aparece uma barra de rolagem (a rodinha do mouse também rola).
 - **Clique em qualquer campeão** do painel para abrir a página da build dele no METAsrc.
 - **X da janela:** com o LoL aberto, só esconde o painel. Ele volta na próxima vez que o LoL abrir.
 - **Sair:** fecha de vez. Ele volta a ligar com o Windows.
@@ -127,6 +128,28 @@ build_exe.bat
 O script instala o [PyInstaller](https://pyinstaller.org/) e gera `dist\MayhemBuild.exe`, já com o ícone, o script do navegador e os combos dentro.
 Para atualizar o `.exe` que fica no repositório, copie o `dist\MayhemBuild.exe` para a raiz e faça o commit.
 
+## Testes
+
+Os testes ficam em `testes/` e usam o Python de sempre (nada para instalar). Eles fingem ser o cliente do LoL, usam dados de exemplo inventados e uma pasta temporária, então não mexem nos seus dados. O painel de verdade pode ficar aberto enquanto eles rodam.
+
+```bash
+py testes/rodar_testes.py               # todos (precisa de internet: Data Dragon e OP.GG)
+py testes/rodar_testes.py tela partida  # só alguns
+py testes/rodar_testes.py --interativo  # inclui o que abre uma janela de verdade do navegador no outro monitor
+```
+
+| Teste | O que confere |
+|---|---|
+| `selecao` | Seleção no Mayhem (build, cartinhas e tier do OP.GG, banco) e na Arena (dados do script, abre o navegador) |
+| `partida` | A build fica no painel durante a partida e some no fim |
+| `bigorna` | Lista da bigorna na Arena: ordem pelo tier, banidos fora, vídeos do King Nidhogg |
+| `recuperar` | Painel aberto com a partida rolando acha o seu campeão |
+| `aba` | Troca de campeão na mesma aba do navegador |
+| `tela` | O painel cabe na tela e rola numa tela de 700 px |
+| `bandeja` | Ícone perto do relógio: mostra, esconde e sai |
+| `opgg` | Busca de verdade no OP.GG |
+| `janela` | (só com `--interativo`) janela nova no outro monitor sem mexer nas que já estavam abertas |
+
 ## Segurança e regras da Riot
 
 - O painel só escuta em `127.0.0.1`, então nenhum outro computador consegue falar com ele. Ele só aceita dados vindos do `https://www.metasrc.com` e confere o formato antes de salvar.
@@ -156,6 +179,7 @@ Para atualizar o `.exe` que fica no repositório, copie o `dist\MayhemBuild.exe`
 | `mayhembuild.ico` / `assets/icone.png` | O ícone |
 | `build_exe.bat` | Gera o `.exe` |
 | `MayhemBuild.exe` | O painel pronto para usar |
+| `testes/` | Testes automáticos (ver [Testes](#testes)) |
 | `NOTAS.md` | Decisões, armadilhas conhecidas e próximos passos (para quem for mexer no código) |
 | `MayhemBuild.ps1` / `MayhemBuild.bat` | Primeira versão, em PowerShell: só abre a build, sem painel |
 

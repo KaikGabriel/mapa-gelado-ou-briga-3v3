@@ -1483,6 +1483,30 @@ class Bandeja(threading.Thread):
             self.join(2)
 
 
+def area_util_da_janela(janela) -> tuple[int, int, int, int]:
+    """(esquerda, topo, direita, baixo) da area util do monitor da janela (sem a barra de tarefas)."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class MONITORINFO(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT),
+                        ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
+
+        u32 = ctypes.WinDLL("user32")
+        u32.MonitorFromWindow.restype = wintypes.HMONITOR
+        u32.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
+        mon = u32.MonitorFromWindow(int(janela.wm_frame(), 16), 2)   # MONITOR_DEFAULTTONEAREST
+        mi = MONITORINFO()
+        mi.cbSize = ctypes.sizeof(mi)
+        if mon and u32.GetMonitorInfoW(mon, ctypes.byref(mi)):
+            r = mi.rcWork
+            return r.left, r.top, r.right, r.bottom
+    except Exception:
+        pass
+    return 0, 0, janela.winfo_screenwidth(), janela.winfo_screenheight() - 48
+
+
 class App:
     def __init__(self, raiz: tk.Tk, auto: bool = False):
         self.raiz = raiz
@@ -1517,6 +1541,18 @@ class App:
         self.aviso = tk.Label(raiz, text="", bg=FUNDO, fg=ALERTA, font=("Segoe UI", 11, "bold"), anchor="w")
         self.aviso.pack(fill="x", padx=12)
 
+        # tudo abaixo do status fica numa area com rolagem: o painel nunca passa da tela
+        area = tk.Frame(raiz, bg=FUNDO)
+        area.pack(fill="both", expand=True)
+        self.barra = tk.Scrollbar(area, orient="vertical")
+        self.tela = tk.Canvas(area, bg=FUNDO, highlightthickness=0, bd=0, yscrollcommand=self.barra.set)
+        self.barra.config(command=self.tela.yview)
+        self.tela.pack(side="left", fill="both", expand=True)
+        self.corpo = tk.Frame(self.tela, bg=FUNDO)
+        self.tela.create_window((0, 0), window=self.corpo, anchor="nw")
+        self.rolando = False
+        raiz.bind_all("<MouseWheel>", self._roda_mouse)
+
         self.meu = self._secao("SEU CAMPEAO")
         self.build = self._secao("BUILD (Mayhem: OP.GG  |  Arena: METAsrc)")
         self.cartas = self._secao("CARTINHAS RECOMENDADAS (so na selecao)")
@@ -1524,23 +1560,23 @@ class App:
         self.banco = self._secao("BANCO (ordenado pelo tier, ★ = melhor que o seu)")
         self.aliados = self._secao("ALIADOS")
         # so aparecem na Arena com dados do site
-        self.area_arena = tk.Frame(raiz, bg=FUNDO)
+        self.area_arena = tk.Frame(self.corpo, bg=FUNDO)
         self.area_arena.pack(fill="x")
         self.bigorna = self._secao("⚒ BIGORNA: favoritos da torcida (★ = forte, tier A ou melhor)",
                                    self.area_arena)
         self.bans = self._secao("SUGESTAO DE BAN (fortes e muito escolhidos)", self.area_arena, ALERTA)
         self.picks = self._secao("MELHORES PICKS (tier do site)", self.area_arena, BOM)
 
-        tk.Label(raiz, text="Mayhem: tier e winrate do OP.GG.  Arena: tier do METAsrc e colocacao media "
+        tk.Label(self.corpo, text="Mayhem: tier e winrate do OP.GG.  Arena: tier do METAsrc e colocacao media "
                             "(menor = melhor).",
                  bg=FUNDO, fg=APAGADO, font=("Segoe UI", 8), anchor="w", justify="left").pack(fill="x", padx=12)
 
-        linha = tk.Frame(raiz, bg=FUNDO)
+        linha = tk.Frame(self.corpo, bg=FUNDO)
         linha.pack(fill="x", padx=12, pady=(6, 0))
         self.fonte = tk.Label(linha, text=DADOS.resumo(), bg=FUNDO, fg=APAGADO, font=("Segoe UI", 8),
                               anchor="w", wraplength=360, justify="left")
         self.fonte.pack(fill="x")
-        botoes = tk.Frame(raiz, bg=FUNDO)
+        botoes = tk.Frame(self.corpo, bg=FUNDO)
         botoes.pack(fill="x", padx=12, pady=(2, 4))
         links = [("Instalar script", f"http://127.0.0.1:{DADOS_PORT}/{SCRIPT_NOME}"),
                  ("Atualizar Arena", TIER_URL.format(site="arena"))]
@@ -1552,7 +1588,7 @@ class App:
                   activeforeground=ALERTA, relief="flat", font=("Segoe UI", 8), cursor="hand2",
                   padx=8).pack(side="right")
 
-        opcoes = tk.Frame(raiz, bg=FUNDO)
+        opcoes = tk.Frame(self.corpo, bg=FUNDO)
         opcoes.pack(fill="x", padx=8, pady=(0, 10))
         self.vars = {}
         for chave, texto in (("auto_abrir", "Abrir a build da Arena no navegador sozinho"),
@@ -1571,7 +1607,7 @@ class App:
         self.raiz.after(200, self.ler_fila)
 
     def _secao(self, titulo, pai=None, cor=DESTAQUE):
-        caixa = tk.Frame(pai or self.raiz, bg=FUNDO)   # titulo + quadro (para poder esconder)
+        caixa = tk.Frame(pai or self.corpo, bg=FUNDO)   # titulo + quadro (para poder esconder)
         caixa.pack(fill="x")
         tk.Label(caixa, text=titulo, bg=FUNDO, fg=cor, font=("Segoe UI", 8, "bold"),
                  anchor="w").pack(fill="x", padx=12, pady=(6, 0))
@@ -1766,6 +1802,34 @@ class App:
         else:
             self.area_arena.pack_forget()
         self.aviso.config(text=e.get("aviso", ""))
+        self.ajustar_tamanho()
+
+    def _roda_mouse(self, evento):
+        if self.rolando:
+            self.tela.yview_scroll(int(-evento.delta / 120), "units")
+
+    def ajustar_tamanho(self):
+        """Altura do painel = o conteudo, mas no maximo a area util da tela; o que sobrar rola."""
+        self.raiz.update_idletasks()
+        alto, largo = self.corpo.winfo_reqheight(), self.corpo.winfo_reqwidth()
+        esq, topo, dir_, baixo = area_util_da_janela(self.raiz)
+        fixo = self.status.winfo_reqheight() + self.aviso.winfo_reqheight() + 10
+        limite = max(300, (baixo - topo) - fixo - 50)   # 50 = barra de titulo e bordas da janela
+        self.rolando = alto > limite
+        self.tela.configure(width=largo, height=min(alto, limite), scrollregion=(0, 0, largo, alto))
+        if self.rolando:
+            if not self.barra.winfo_manager():
+                self.barra.pack(side="right", fill="y", before=self.tela)
+        else:
+            self.barra.pack_forget()
+            self.tela.yview_moveto(0)
+        # a janela inteira dentro da area util (o fim nao fica escondido atras da barra de tarefas)
+        if self.raiz.state() == "normal":
+            self.raiz.update_idletasks()
+            x, y = self.raiz.winfo_x(), self.raiz.winfo_y()
+            h = self.raiz.winfo_reqheight() + 40
+            if y + h > baixo or y < topo:
+                self.raiz.geometry(f"+{x}+{max(topo, baixo - h)}")
 
     def fechar(self):
         """X da janela: com o LoL aberto so esconde (volta na proxima vez que o LoL abrir)."""

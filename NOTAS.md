@@ -63,6 +63,13 @@ O uso e a instalação estão no [README.md](README.md).
 - **Cartinhas só aparecem na seleção de campeões**, nunca durante a partida (regra da Riot sobre programas que
   indicam escolhas dentro do jogo).
 
+- **Testes em `testes/`, com `rodar_testes.py`.** Só usam a biblioteca padrão. Carregam o `.pyw` como módulo,
+  trocam `CONFIG_DIR` por uma pasta temporária, desligam o `OPGG.pedir` (menos no `teste_opgg`) e fingem o cliente
+  trocando `mb.lcu`. O `teste_janela` abre uma janela de verdade, por isso só roda com `--interativo`.
+- **Painel com rolagem:** o conteúdo fica num `Canvas` (`self.tela`) com um `Frame` dentro (`self.corpo`). O status e o
+  aviso ficam fora, sempre visíveis. `ajustar_tamanho()` (fim do `render`) limita a altura à área útil do monitor
+  onde a janela está e liga a barra só quando precisa.
+
 ## Armadilhas conhecidas
 
 - No cliente, **Mayhem é `gameMode` KIWI** (mapa 12, filas 2400 e 3270) e **Arena é CHERRY** (mapa 30, fila 1750).
@@ -82,6 +89,9 @@ O uso e a instalação estão no [README.md](README.md).
 - O campo `relatedPrimeItemId` de `/lol-champ-select/v1/all-grid-champions` NÃO é a bigorna (é só o id do campeão).
 - Regras da Riot: não mostrar winrate de cartinhas nem de itens da Arena. Por isso o painel mostra só a ordem das
   cartinhas do OP.GG, sem os números de desempenho. Winrate de campeão pode.
+- Todas as seções do painel ficam dentro de `self.corpo`, não da `raiz`. Seção nova: use `self._secao(...)` (já usa
+  `self.corpo`) ou o teste `teste_partida` (ordem das seções) quebra.
+- `bind_all("<MouseWheel>")` pega a rodinha no painel inteiro; o handler só rola quando a barra está visível.
 - O segundo monitor do usuário é vertical e fica à esquerda (coordenadas negativas).
 
 ## Estado atual
@@ -91,6 +101,7 @@ O uso e a instalação estão no [README.md](README.md).
   (testado no PC do usuário: as 2 janelas do Chrome que já existiam não se mexeram).
 - Troca na mesma aba: testada com o servidor do painel numa porta de teste e uma aba de verdade com o script dentro.
   Falta testar no Chrome do usuário com o Tampermonkey e o script 1.3 instalado.
+- Testes automáticos: todos passam (`py testes/rodar_testes.py`, e o `--interativo` também).
 - Testado só com seleção simulada: a seleção de campeões real com o script 1.2 do Tampermonkey e os dados da Arena chegando.
 
 ## Próximos passos possíveis
